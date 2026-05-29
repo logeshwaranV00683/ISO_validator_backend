@@ -1,0 +1,14 @@
+server:
+    port: 8081
+
+spring:
+    application:
+      name: auth-service
+
+    profiles:
+      active: dev
+
+logging:
+    level:
+      root: INFO
+
