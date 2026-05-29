@@ -1,0 +1,68 @@
+version: '3.8'
+
+# ================================================================
+# ISO Validator — Infrastructure (Dev Local)
+# MySQL is intentionally excluded — use your local instance on 3306
+# Start: docker-compose up -d
+# Stop:  docker-compose down
+# Logs:  docker-compose logs -f
+# ================================================================
+
+services:
+
+  # ─────────────────────────────────────────────
+  # Redis 7 — Rate limiting + Gateway route cache
+  # + Run reference counter (INCR VLD-YYYYMMDD)
+  # Port: 6379
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: iso-validator-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --loglevel notice
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # RabbitMQ 3 — Async messaging
+  # Exchanges: validation.events / audit.events / cache.invalidation
+  # AMQP port:       5672
+  # Management UI:   15672  (guest / guest)
+  #   → http://localhost:15672
+  # ─────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: iso-validator-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running", "-q"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+# ─────────────────────────────────────────────
+# Named volumes — persist data across restarts
+# ─────────────────────────────────────────────
+volumes:
+  redis_data:
+    name: iso_validator_redis_data
+  rabbitmq_data:
+    name: iso_validator_rabbitmq_data
