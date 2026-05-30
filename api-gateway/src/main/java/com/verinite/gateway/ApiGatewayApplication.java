@@ -1,4 +1,4 @@
-package com.verinite.api_gateway;
+package com.verinite.gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
