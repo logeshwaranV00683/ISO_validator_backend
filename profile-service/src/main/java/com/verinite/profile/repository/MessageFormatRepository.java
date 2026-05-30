@@ -10,9 +10,9 @@ import java.util.Optional;
 @Repository
 public interface MessageFormatRepository extends JpaRepository<MessageFormat, Long> {
 
-    List<MessageFormat> findAllByProfileIdAndDeletedFalse(Long profileId);
+    List<MessageFormat> findAllByProfileIdAndDeletedAtIsNull(Long profileId);
 
-    Optional<MessageFormat> findByIdAndDeletedFalse(Long id);
+    Optional<MessageFormat> findByIdAndDeletedAtIsNull(Long id);
 
-    Optional<MessageFormat> findByProfileIdAndDeletedFalse(Long profileId);
+    Optional<MessageFormat> findByProfileIdAndDeletedAtIsNull(Long profileId);
 }

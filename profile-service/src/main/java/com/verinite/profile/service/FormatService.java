@@ -29,13 +29,13 @@ public class FormatService {
     }
 
     public FormatDto getById(Long id) {
-        MessageFormat format = formatRepo.findByIdAndDeletedFalse(id)
+        MessageFormat format = formatRepo.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Format not found: " + id));
         return mapToDto(format);
     }
 
     public ProfileFormatResponse getActiveFormatByProfile(Long profileId) {
-        MessageFormat format = formatRepo.findByProfileIdAndDeletedFalse(profileId)
+        MessageFormat format = formatRepo.findByProfileIdAndDeletedAtIsNull(profileId)
                 .orElseThrow(() -> new RuntimeException("No format found for profile: " + profileId));
         return new ProfileFormatResponse(
                 format.getId(),

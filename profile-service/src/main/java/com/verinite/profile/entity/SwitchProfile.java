@@ -22,16 +22,59 @@ public class SwitchProfile {
     @Column(name = "profile_name", nullable = false, unique = true)
     private String profileName;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "environment", nullable = false)
+    @Builder.Default
+    private Environment environment = Environment.DEV;
+
+    @Column(name = "host", nullable = false)
+    private String host;
+
+    @Column(name = "port", nullable = false)
+    private Integer port;
+
+    @Column(name = "timezone", nullable = false)
+    @Builder.Default
+    private String timezone = "UTC";
+
+    @Column(name = "connection_timeout_ms", nullable = false)
+    @Builder.Default
+    private Integer connectionTimeoutMs = 30000;
+
+    @Column(name = "tpdu_enabled", nullable = false)
+    @Builder.Default
+    private Boolean tpduEnabled = false;
+
+    @Column(name = "tpdu_value", length = 20)
+    private String tpduValue;
 
     @Column(name = "active", nullable = false)
     @Builder.Default
     private Boolean active = false;
 
-    @Column(name = "deleted", nullable = false)
+    @Column(name = "is_default", nullable = false)
     @Builder.Default
-    private Boolean deleted = false;
+    private Boolean isDefault = false;
+
+    @Column(name = "last_tested_at")
+    private LocalDateTime lastTestedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_test_result", nullable = false)
+    @Builder.Default
+    private TestResult lastTestResult = TestResult.UNTESTED;
+
+    @Column(name = "last_test_latency_ms")
+    private Integer lastTestLatencyMs;
+
+    @Column(name = "last_test_message", length = 500)
+    private String lastTestMessage;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -40,4 +83,18 @@ public class SwitchProfile {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "created_by")
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+
+    public enum Environment {
+        PROD, UAT, DEV
+    }
+
+    public enum TestResult {
+        OK, FAILED, UNTESTED
+    }
 }

@@ -10,9 +10,9 @@ import java.util.Optional;
 @Repository
 public interface SwitchProfileRepository extends JpaRepository<SwitchProfile, Long> {
 
-    List<SwitchProfile> findAllByDeletedFalse();
+    List<SwitchProfile> findAllByDeletedAtIsNull();
 
-    Optional<SwitchProfile> findByIdAndDeletedFalse(Long id);
+    Optional<SwitchProfile> findByIdAndDeletedAtIsNull(Long id);
 
     boolean existsByProfileName(String profileName);
 }

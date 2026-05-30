@@ -25,18 +25,28 @@ public class MessageFormat {
     @Column(name = "format_name", nullable = false)
     private String formatName;
 
-    @Column(name = "mti", nullable = false, length = 4)
+    @Column(name = "iso_version")
+    private String isoVersion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "encoding", nullable = false)
+    @Builder.Default
+    private Encoding encoding = Encoding.ASCII;
+
+    @Column(name = "mti", length = 4)
     private String mti;
 
-    @Column(name = "xml_content", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "xml_content", nullable = false, columnDefinition = "LONGTEXT")
     private String xmlContent;
+
+    @Column(name = "checksum", length = 64)
+    private String checksum;
 
     @Column(name = "current_version", nullable = false)
     @Builder.Default
     private Integer currentVersion = 1;
 
-    @Column(name = "deleted_at", nullable = false)
-    @Builder.Default
+    @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
     @CreationTimestamp
@@ -46,4 +56,14 @@ public class MessageFormat {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "created_by")
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+
+    public enum Encoding {
+        ASCII, EBCDIC, Binary
+    }
 }

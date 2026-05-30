@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,20 +34,20 @@ public class ProfileService {
     }
 
     public List<ProfileDto> getAll() {
-        return profileRepo.findAllByDeletedFalse()
+        return profileRepo.findAllByDeletedAtIsNull()
                 .stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
     public ProfileDto getById(Long id) {
-        SwitchProfile profile = profileRepo.findByIdAndDeletedFalse(id)
+        SwitchProfile profile = profileRepo.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Profile not found: " + id));
         return mapToDto(profile);
     }
 
     public ProfileDto update(Long id, UpdateProfileRequest req) {
-        SwitchProfile profile = profileRepo.findByIdAndDeletedFalse(id)
+        SwitchProfile profile = profileRepo.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Profile not found: " + id));
         if (req.getProfileName() != null) profile.setProfileName(req.getProfileName());
         if (req.getDescription() != null) profile.setDescription(req.getDescription());
@@ -54,7 +55,7 @@ public class ProfileService {
     }
 
     public void setActive(Long id, boolean active) {
-        SwitchProfile profile = profileRepo.findByIdAndDeletedFalse(id)
+        SwitchProfile profile = profileRepo.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Profile not found: " + id));
         profile.setActive(active);
         profileRepo.save(profile);
@@ -62,9 +63,9 @@ public class ProfileService {
     }
 
     public void delete(Long id) {
-        SwitchProfile profile = profileRepo.findByIdAndDeletedFalse(id)
+        SwitchProfile profile = profileRepo.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Profile not found: " + id));
-        profile.setDeleted(true);
+        profile.setDeletedAt(LocalDateTime.now());
         profileRepo.save(profile);
     }
 
