@@ -1,6 +1,5 @@
 package com.verinite.auth_service.controller;
 
-
 import com.verinite.auth_service.dto.CreateUserRequest;
 import com.verinite.auth_service.dto.UserDto;
 import com.verinite.auth_service.service.UserService;
@@ -9,8 +8,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -21,67 +20,34 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<UserDto>>
-    createUser(
-            @RequestBody
-            @Valid
-            CreateUserRequest request) {
-
-        UserDto user =
-                userService.createUser(request);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(
-                        user,
-                        "User created successfully"));
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserDto>> createUser(@RequestBody @Valid CreateUserRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(userService.createUser(request),"User created successfully"));
     }
 
     @GetMapping
-    public ResponseEntity<
-            ApiResponse<List<UserDto>>>
-    getUsers() {
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        userService.getAllUsers(),
-                        "Users fetched successfully"
-                )
-        );
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<
-            ApiResponse<Void>>
-    deleteUser(
-            @PathVariable Long id) {
-
-        userService.deleteUser(id);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        null,
-                        "User deleted successfully"
-                )
-        );
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST','VIEWER')")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getUsers() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(),"Users fetched successfully"));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<UserDto>> getUserById(
-            @PathVariable Long id) {
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        userService.getUserById(id),
-                        "User fetched successfully"));
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST','VIEWER')")
+    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id),"User fetched successfully"));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<UserDto>> updateUser(
-            @PathVariable Long id,
-            @RequestBody @Valid CreateUserRequest request) {
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        userService.updateUser(id, request),
-                        "User updated successfully"));
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserDto>> updateUser(@PathVariable Long id, @RequestBody @Valid CreateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request),"User updated successfully"));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "User deleted successfully"));
     }
 }

@@ -1,55 +1,33 @@
-server:
-  port: 8081
-
 spring:
   application:
     name: auth-service
-
-  # MySQL Database
   datasource:
-    url: jdbc:mysql://localhost:3306/iso_validator_db
+    url: jdbc:mysql://localhost:3306/iso_validator_db?useSSL=false&serverTimezone=UTC
     username: root
     password: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  # JPA / Hibernate
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
-        format_sql: true
-
+    open-in-view: false
   cloud:
-    compatibility-verifier:
+    config:
       enabled: false
 
-  # RabbitMQ
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+server:
+  port: 8081
 
-# Eureka
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
-  instance:
-    prefer-ip-address: true
+    fetch-registry: true
+    register-with-eureka: true
 
-# Actuator
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info
-  endpoint:
-    health:
-      show-details: always
+jwt:
+  private-key-path: E:/ISO_Backend/iso8583-validator-backend/keys/private.pem
+  public-key-path: E:/ISO_Backend/iso8583-validator-backend/keys/public.pem
+  expiration-ms: 28800000  # 8 hours
 
 logging:
   level:
