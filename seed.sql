@@ -66,7 +66,7 @@ INSERT INTO users
 VALUES
 (
     'admin',
-    '$2a$10$8.UnVuG9HHgffUDAlk8qfOuVGkqRzgVymGe07xd00DMxs.AKubens',
+    '$2a$12$6677N8WveOcQZS2IWDF9LOupWTvqunLpBXQQBtn7DMMQbHoNrIXSi',
     -- password: Admin@123
     'System Admin',
     'admin@iso8583.local',
@@ -77,7 +77,7 @@ VALUES
 ),
 (
     'analyst',
-    '$2a$10$WI4WpQMwqZBBv5V5iFJjmu5YiQ3pCrJP6M0l6eJLR1HoWRVvnbdIa',
+    '$2a$12$GW7ERcAtoYGy8MyAqRICkOptsIT723AA5.HJ2OCuCvfTFUNmCMGVi',
     -- password: Analyst@123
     'Test Analyst',
     'analyst@iso8583.local',
@@ -88,7 +88,7 @@ VALUES
 ),
 (
     'viewer',
-    '$2a$10$KKJ7s3PtjOJmB8KJvTKgfOBd0a6Hu/HBcjFBd2nCGF3A2BXzjGpca',
+    '$2a$12$LWIYgpidES4N7pIYfof/UugoAeeU4LnNTHfjgR0/v2fAAfl4TGMgC',
     -- password: Viewer@123
     'Test Viewer',
     'viewer@iso8583.local',

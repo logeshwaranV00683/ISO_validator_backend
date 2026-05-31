@@ -15,7 +15,7 @@ spring:
   # JPA / Hibernate
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -40,6 +40,11 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
   instance:
     prefer-ip-address: true
+
+# JWT — private key for signing (auth-service only)
+jwt:
+  private-key-path: classpath:keys/private.pem
+  expiry-minutes: 60
 
 # Actuator
 management:

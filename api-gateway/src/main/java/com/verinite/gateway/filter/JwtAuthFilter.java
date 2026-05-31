@@ -4,30 +4,29 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.web.server.ServerWebExchange;
-
 import reactor.core.publisher.Mono;
 
 import java.security.PublicKey;
 import java.util.List;
-
 
 @Component
 public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private final PublicKey publicKey;
 
-    public JwtAuthFilter(PublicKey publicKey) { this.publicKey = publicKey; }
+    public JwtAuthFilter(PublicKey publicKey) {
+        this.publicKey = publicKey;
+    }
 
     private static final List<String> PUBLIC_PATHS = List.of(
             "/auth/login",
@@ -36,17 +35,13 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     );
 
     @Override
-    public int getOrder() {
-        return -1;
-    }
+    public int getOrder() { return -1; }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange,
                              GatewayFilterChain chain) {
 
-        String path = exchange.getRequest()
-                .getPath()
-                .toString();
+        String path = exchange.getRequest().getPath().toString();
 
         if (PUBLIC_PATHS.stream().anyMatch(path::startsWith)) {
             return chain.filter(exchange);
@@ -56,71 +51,44 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
                 .getHeaders()
                 .getFirst(HttpHeaders.AUTHORIZATION);
 
-        if (authHeader == null ||
-                !authHeader.startsWith("Bearer ")) {
-
-            return rejectWith401(exchange,
-                    "Missing Authorization header");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return rejectWith401(exchange, "Missing Authorization header");
         }
 
         String token = authHeader.substring(7);
 
         try {
-
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(publicKey)
+            // ✅ jjwt 0.12.x API
+            Claims claims = Jwts.parser()
+                    .verifyWith(publicKey)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
 
-            ServerHttpRequest mutatedRequest =
-                    exchange.getRequest()
-                            .mutate()
-                            .header("X-Auth-User-Id",
-                                    claims.getSubject())
-                            .header("X-Auth-Username",
-                                    (String) claims.get("username"))
-                            .header("X-Auth-Role",
-                                    (String) claims.get("role"))
-                            .build();
+            ServerHttpRequest mutatedRequest = exchange.getRequest()
+                    .mutate()
+                    .header("X-Auth-User-Id",  claims.getSubject())
+                    .header("X-Auth-Username", (String) claims.get("username"))
+                    .header("X-Auth-Role",     (String) claims.get("role"))
+                    .build();
 
-            return chain.filter(
-                    exchange.mutate()
-                            .request(mutatedRequest)
-                            .build());
+            return chain.filter(exchange.mutate().request(mutatedRequest).build());
 
         } catch (ExpiredJwtException e) {
-
-            return rejectWith401(exchange,
-                    "Token expired");
-
+            return rejectWith401(exchange, "Token expired");
         } catch (JwtException e) {
-
-            return rejectWith401(exchange,
-                    "Invalid token");
+            return rejectWith401(exchange, "Invalid token");
         }
     }
 
-    private Mono<Void> rejectWith401(ServerWebExchange exchange,
-                                     String message) {
+    private Mono<Void> rejectWith401(ServerWebExchange exchange, String message) {
 
-        exchange.getResponse()
-                .setStatusCode(HttpStatus.UNAUTHORIZED);
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
-        exchange.getResponse()
-                .getHeaders()
-                .setContentType(MediaType.APPLICATION_JSON);
+        byte[] body = ("{\"success\":false,\"message\":\"" + message + "\"}").getBytes();
+        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(body);
 
-        byte[] body = (
-                "{\"success\":false,\"message\":\""
-                        + message + "\"}")
-                .getBytes();
-
-        DataBuffer buffer = exchange.getResponse()
-                .bufferFactory()
-                .wrap(body);
-
-        return exchange.getResponse()
-                .writeWith(Mono.just(buffer));
+        return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 }
