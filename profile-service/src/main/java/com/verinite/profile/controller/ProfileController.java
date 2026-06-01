@@ -18,13 +18,13 @@ public class ProfileController {
 
     private final ProfileService profileService;
 
-    @PostMapping
+    @PostMapping("/create")
     public ResponseEntity<ProfileDto> createProfile(
             @RequestBody @Valid CreateProfileRequest req) {
         return ResponseEntity.status(201).body(profileService.create(req));
     }
 
-    @GetMapping
+    @GetMapping("/getAll")
     public ResponseEntity<List<ProfileDto>> getAllProfiles() {
         return ResponseEntity.ok(profileService.getAll());
     }

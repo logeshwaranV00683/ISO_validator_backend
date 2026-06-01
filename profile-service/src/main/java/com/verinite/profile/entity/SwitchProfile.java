@@ -27,36 +27,38 @@ public class SwitchProfile {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "environment", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private Environment environment = Environment.DEV;
 
-    @Column(name = "host", nullable = false)
+    @Column(name = "host")
+    @Builder.ObtainVia
     private String host;
 
-    @Column(name = "port", nullable = false)
+    @Column(name = "port")
+    @Builder.ObtainVia
     private Integer port;
 
     @Column(name = "timezone", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private String timezone = "UTC";
 
     @Column(name = "connection_timeout_ms", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private Integer connectionTimeoutMs = 30000;
 
     @Column(name = "tpdu_enabled", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private Boolean tpduEnabled = false;
 
     @Column(name = "tpdu_value", length = 20)
     private String tpduValue;
 
     @Column(name = "active", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private Boolean active = false;
 
     @Column(name = "is_default", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private Boolean isDefault = false;
 
     @Column(name = "last_tested_at")
@@ -64,7 +66,7 @@ public class SwitchProfile {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "last_test_result", nullable = false)
-    @Builder.Default
+    @Builder.ObtainVia
     private TestResult lastTestResult = TestResult.UNTESTED;
 
     @Column(name = "last_test_latency_ms")
