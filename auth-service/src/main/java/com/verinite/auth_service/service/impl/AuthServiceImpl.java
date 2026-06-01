@@ -1,5 +1,6 @@
 package com.verinite.auth_service.service.impl;
 
+import com.verinite.auth_service.exception.ResourceNotFoundException;
 import com.verinite.auth_service.util.AuthConstants;
 import com.verinite.auth_service.dto.LoginRequest;
 import com.verinite.auth_service.dto.LoginResponse;
@@ -132,6 +133,44 @@ public class AuthServiceImpl implements AuthService {
                 .expiresAt(expiresAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
                 .build();
     }
+
+    @Override
+    public boolean validateToken(String jti) {
+        return sessionRepository.findByJti(jti)
+                .map(s -> s.getRevokedAt() == null
+                        && s.getExpiresAt().isAfter(LocalDateTime.now()))
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(Long userId,String currentPassword, String newPassword) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with id: " + userId));
+
+        if (!passwordEncoder.matches(
+                currentPassword, user.getPasswordHash())) {
+            throw new RuntimeException("Current password is incorrect");
+        }
+
+        // Revoke all active sessions
+        sessionRepository
+                .findByUserIdAndRevokedAtIsNull(userId)
+                .forEach(session -> {
+                    session.setRevokedAt(LocalDateTime.now());
+                    session.setRevokeReason("PASSWORD_CHANGE");
+                    sessionRepository.save(session);
+                });
+
+        user.setPasswordHash(
+                passwordEncoder.encode(newPassword));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        userRepository.save(user);
+    }
+
 
     @Override
     @Transactional

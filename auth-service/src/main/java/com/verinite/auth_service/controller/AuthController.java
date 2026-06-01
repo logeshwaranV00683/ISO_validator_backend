@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 
 import java.security.PublicKey;
 
@@ -94,6 +96,20 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(null, "Password changed. Please log in again."));
     }
 
+    // Internal — Janani's Gateway calls this
+    @GetMapping("/internal/validate-token")
+    public ResponseEntity<ApiResponse<Boolean>> validateToken(@RequestParam String jti) {
+        boolean valid = authService.validateToken(jti);
+        return ResponseEntity.ok(ApiResponse.success(valid, "Token validation result"));
+    }
+
+    // Change password — ADMIN or own account
+    @PutMapping("/users/{id}/password")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@PathVariable Long id, @RequestBody @Valid ChangePasswordRequest request) {
+        authService.changePassword(id, request.getCurrentPassword(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
+    }
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private Claims parseClaims(String authHeader) {
@@ -108,6 +124,7 @@ public class AuthController {
     private String extractJti(String authHeader) {
         return parseClaims(authHeader).getId();
     }
+
 
     private String bearerToken(String header) {
         if (header == null || !header.startsWith("Bearer ")) {
