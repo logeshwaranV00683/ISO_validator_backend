@@ -138,8 +138,8 @@ CREATE TABLE switch_profiles (
     profile_name          VARCHAR(100)    NOT NULL,
     description           TEXT            NULL,
     environment           ENUM('PROD','UAT','DEV') NOT NULL DEFAULT 'DEV',
-    host                  VARCHAR(255)    NOT NULL,
-    port                  INT             NOT NULL    COMMENT 'TCP port 1–65535',
+    host                  VARCHAR(255)    NULL,
+    port                  INT             NULL    COMMENT 'TCP port 1–65535',
     timezone              VARCHAR(100)    NOT NULL DEFAULT 'UTC'
                                                       COMMENT 'IANA tz — for DE7/DE12/DE13 parsing',
     connection_timeout_ms INT             NOT NULL DEFAULT 30000,
