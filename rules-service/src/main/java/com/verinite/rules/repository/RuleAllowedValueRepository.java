@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface RuleAllowedValueRepository extends JpaRepository<RuleAllowedValue, Long> {
 
-    Optional<RuleAllowedValue> findByRuleIdAndValue(Long ruleId, String value);
+    Optional<RuleAllowedValue> findByRuleIdAndAllowedValue(Long ruleId, String allowedValue);
 
-    void deleteByRuleIdAndValue(Long ruleId, String value);
+    void deleteByRuleIdAndAllowedValue(Long ruleId, String allowedValue);
 }

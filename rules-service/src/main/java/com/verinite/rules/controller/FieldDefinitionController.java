@@ -1,9 +1,11 @@
 package com.verinite.rules.controller;
 
-import com.verinite.rules.entity.FieldDefinition;
+import com.verinite.rules.dto.*;
 import com.verinite.rules.service.FieldDefinitionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,13 +18,50 @@ public class FieldDefinitionController {
     private final FieldDefinitionService fieldDefinitionService;
 
     // GET /field-definitions?profileId=1&mti=0200
-    // Only returns fields where is_builder_visible = true
-    // DE1 (Bitmap) with is_builder_visible=false will NOT appear here
+    // Returns only is_builder_visible=true fields
     @GetMapping
-    public ResponseEntity<List<FieldDefinition>> getFieldDefinitions(
-            @RequestParam Long profileId,
+    public ResponseEntity<List<FieldDefinitionDto>> getFieldDefinitions(
+            @RequestParam Long   profileId,
             @RequestParam String mti) {
-        List<FieldDefinition> fields = fieldDefinitionService.getVisibleFields(profileId, mti);
-        return ResponseEntity.ok(fields);
+        return ResponseEntity.ok(fieldDefinitionService.getVisibleFields(profileId, mti));
+    }
+
+    // GET /field-definitions/{id}
+    @GetMapping("/{id}")
+    public ResponseEntity<FieldDefinitionDto> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(fieldDefinitionService.getById(id));
+    }
+
+    // POST /field-definitions
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<FieldDefinitionDto> create(
+            @RequestBody @Valid CreateFieldDefinitionRequest req) {
+        return ResponseEntity.status(201).body(fieldDefinitionService.create(req));
+    }
+
+    // PUT /field-definitions/{id}
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<FieldDefinitionDto> update(
+            @PathVariable Long                        id,
+            @RequestBody  UpdateFieldDefinitionRequest req) {
+        return ResponseEntity.ok(fieldDefinitionService.update(id, req));
+    }
+
+    // DELETE /field-definitions/{id} — soft delete → 204 No Content
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        fieldDefinitionService.softDelete(id);
+        return ResponseEntity.noContent().build();      // 204
+    }
+
+    // POST /field-definitions/bulk-import
+    @PostMapping("/bulk-import")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BulkImportResult> bulkImport(
+            @RequestBody @Valid BulkImportFieldDefinitionsRequest req) {
+        return ResponseEntity.ok(fieldDefinitionService.bulkImport(req));
     }
 }
