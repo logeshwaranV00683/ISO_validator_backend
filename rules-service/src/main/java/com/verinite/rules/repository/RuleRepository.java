@@ -20,7 +20,7 @@ public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
         WHERE r.profileId   = :profileId
           AND r.mti         = :mti
           AND r.active      = true
-          AND r.isDeleted   = false
+          AND r.deletedAt   IS NULL
           AND (r.effectiveFrom IS NULL OR r.effectiveFrom <= :today)
           AND (r.effectiveTo   IS NULL OR r.effectiveTo   >= :today)
         ORDER BY r.priority ASC
@@ -38,7 +38,7 @@ public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
         SELECT r FROM ValidationRule r
         WHERE r.profileId = :profileId
           AND r.mti       = :mti
-          AND r.isDeleted = false
+          AND r.deletedAt IS NULL
         ORDER BY r.priority ASC
     """)
     List<ValidationRule> findAllNonDeleted(
@@ -46,9 +46,10 @@ public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
             @Param("mti")       String mti
     );
 
-    Optional<ValidationRule> findByIdAndIsDeletedFalse(Long id);
+    // deleted_at IS NULL = alive
+    Optional<ValidationRule> findByIdAndDeletedAtIsNull(Long id);
 
-    boolean existsByProfileIdAndMtiAndDeNumberAndIsDeletedFalse(
+    boolean existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
             Long profileId, String mti, String deNumber
     );
 }

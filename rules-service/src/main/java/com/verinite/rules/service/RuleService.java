@@ -36,7 +36,7 @@ public class RuleService {
     public RuleDto create(CreateRuleRequest req) {
         validateRequired(req);
 
-        if (ruleRepository.existsByProfileIdAndMtiAndDeNumberAndIsDeletedFalse(
+        if (ruleRepository.existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
                 req.getProfileId(), req.getMti(), req.getDeNumber())) {
             throw new IllegalStateException(
                     "Rule already exists for profileId=" + req.getProfileId()
@@ -50,7 +50,7 @@ public class RuleService {
 
         saveAllowedValues(saved, req.getAllowedValues());
 
-        ValidationRule refreshed = ruleRepository.findByIdAndIsDeletedFalse(saved.getId())
+        ValidationRule refreshed = ruleRepository.findByIdAndDeletedAtIsNull(saved.getId())
                 .orElse(saved);
 
         publishAudit("CREATE", "RULE", saved.getId(),
@@ -60,7 +60,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // READ — effective rules (public API)
+    // READ
     // ═══════════════════════════════════════════════════════════════════════
 
     public List<RuleDto> getEffectiveRules(Long profileId, String mti) {
@@ -112,8 +112,7 @@ public class RuleService {
         if (req.getEffectiveTo()   != null) rule.setEffectiveTo(req.getEffectiveTo());
         if (req.getDescription()   != null) rule.setDescription(req.getDescription());
 
-        rule.setUpdatedBy(UserContext.getUserId());
-        rule.setUpdatedByName(UserContext.getUsername());
+        rule.setUpdatedBy(UserContext.getUsername());   // String, not Long
 
         ValidationRule saved = ruleRepository.save(rule);
 
@@ -124,7 +123,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // TOGGLE STATUS (PATCH /{id}/status)
+    // TOGGLE STATUS
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -133,8 +132,7 @@ public class RuleService {
         String         before = toJson(rule);
 
         rule.setActive(!Boolean.TRUE.equals(rule.getActive()));
-        rule.setUpdatedBy(UserContext.getUserId());
-        rule.setUpdatedByName(UserContext.getUsername());
+        rule.setUpdatedBy(UserContext.getUsername());
 
         ValidationRule saved = ruleRepository.save(rule);
 
@@ -146,7 +144,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SOFT DELETE
+    // SOFT DELETE — set deleted_at, no is_deleted field
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -154,11 +152,9 @@ public class RuleService {
         ValidationRule rule   = findOrThrow(id);
         String         before = toJson(rule);
 
-        rule.setIsDeleted(true);
+        rule.setDeletedAt(LocalDateTime.now());   // deleted_at IS NOT NULL = deleted
         rule.setActive(false);
-        rule.setDeletedAt(LocalDateTime.now());
-        rule.setUpdatedBy(UserContext.getUserId());
-        rule.setUpdatedByName(UserContext.getUsername());
+        rule.setUpdatedBy(UserContext.getUsername());
 
         ruleRepository.save(rule);
 
@@ -167,7 +163,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BULK IMPORT — single transaction, MERGE or REPLACE strategy
+    // BULK IMPORT
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -182,7 +178,7 @@ public class RuleService {
                 .collect(Collectors.toMap(
                         ValidationRule::getDeNumber,
                         r -> r,
-                        (a, b) -> a   // keep first on duplicate deNumbers
+                        (a, b) -> a
                 ));
 
         if ("REPLACE".equalsIgnoreCase(req.getStrategy())) {
@@ -193,9 +189,8 @@ public class RuleService {
 
             for (ValidationRule r : existing) {
                 if (!incomingDeNumbers.contains(r.getDeNumber())) {
-                    r.setIsDeleted(true);
+                    r.setDeletedAt(LocalDateTime.now());  // soft-delete
                     r.setActive(false);
-                    r.setDeletedAt(LocalDateTime.now());
                     ruleRepository.save(r);
                 }
             }
@@ -213,10 +208,9 @@ public class RuleService {
             if (ruleReq.getPriority() == null) ruleReq.setPriority(i + 1);
 
             if (existingByDeNumber.containsKey(ruleReq.getDeNumber())) {
-                // MERGE — update existing in-memory
-                ValidationRule existing_rule = existingByDeNumber.get(ruleReq.getDeNumber());
-                applyBulkUpdate(existing_rule, ruleReq);
-                toSave.add(existing_rule);
+                ValidationRule existingRule = existingByDeNumber.get(ruleReq.getDeNumber());
+                applyBulkUpdate(existingRule, ruleReq);
+                toSave.add(existingRule);
                 updated++;
             } else {
                 // Insert new
@@ -242,7 +236,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // EXPORT — all non-deleted (no date filter)
+    // EXPORT
     // ═══════════════════════════════════════════════════════════════════════
 
     public List<RuleDto> exportRules(Long profileId, String mti) {
@@ -256,7 +250,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // REORDER — batch priority update
+    // REORDER
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -264,8 +258,7 @@ public class RuleService {
         for (ReorderRulesRequest.RulePriority rp : req.getPriorities()) {
             ValidationRule rule = findOrThrow(rp.getRuleId());
             rule.setPriority(rp.getPriority());
-            rule.setUpdatedBy(UserContext.getUserId());
-            rule.setUpdatedByName(UserContext.getUsername());
+            rule.setUpdatedBy(UserContext.getUsername());
             ruleRepository.save(rule);
         }
         log.info("Reordered {} rules", req.getPriorities().size());
@@ -282,8 +275,7 @@ public class RuleService {
         RuleAllowedValue av = RuleAllowedValue.builder()
                 .rule(rule)
                 .allowedValue(value)
-                .createdBy(UserContext.getUserId())
-                .createdByName(UserContext.getUsername())
+                .createdBy(UserContext.getUsername())   // String
                 .build();
         allowedValueRepository.save(av);
 
@@ -307,12 +299,13 @@ public class RuleService {
     // ═══════════════════════════════════════════════════════════════════════
 
     private ValidationRule findOrThrow(Long id) {
-        return ruleRepository.findByIdAndIsDeletedFalse(id)
+        return ruleRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new EntityNotFoundException("Rule not found: " + id));
     }
 
     private void validateRequired(CreateRuleRequest req) {
-        if (req.getProfileId()   == null) throw new IllegalArgumentException("profileId is required");
+        if (req.getProfileId() == null)
+            throw new IllegalArgumentException("profileId is required");
         if (req.getProfileName() == null || req.getProfileName().isBlank())
             throw new IllegalArgumentException("profileName is required");
         if (req.getMti() == null || req.getMti().isBlank())
@@ -338,9 +331,7 @@ public class RuleService {
                 .effectiveFrom(req.getEffectiveFrom())
                 .effectiveTo(req.getEffectiveTo())
                 .description(req.getDescription())
-                .isDeleted(false)
-                .createdBy(UserContext.getUserId())
-                .createdByName(UserContext.getUsername())
+                .createdBy(UserContext.getUsername())   // String username
                 .build();
     }
 
@@ -357,8 +348,7 @@ public class RuleService {
         if (req.getEffectiveFrom() != null) rule.setEffectiveFrom(req.getEffectiveFrom());
         if (req.getEffectiveTo()   != null) rule.setEffectiveTo(req.getEffectiveTo());
         if (req.getDescription()   != null) rule.setDescription(req.getDescription());
-        rule.setUpdatedBy(UserContext.getUserId());
-        rule.setUpdatedByName(UserContext.getUsername());
+        rule.setUpdatedBy(UserContext.getUsername());
     }
 
     private void saveAllowedValues(ValidationRule rule, List<String> values) {
@@ -367,8 +357,7 @@ public class RuleService {
             allowedValueRepository.save(RuleAllowedValue.builder()
                     .rule(rule)
                     .allowedValue(v)
-                    .createdBy(UserContext.getUserId())
-                    .createdByName(UserContext.getUsername())
+                    .createdBy(UserContext.getUsername())
                     .build());
         }
     }
@@ -379,7 +368,7 @@ public class RuleService {
         try {
             eventPublisher.publishAudit(AuditEvent.builder()
                     .payload(AuditEvent.Payload.builder()
-                            .userId(UserContext.getUserId())
+                            .userId(UserContext.getUserId())      // Long userId stays in audit
                             .username(UserContext.getUsername())
                             .userRole(UserContext.getRole())
                             .action(action)
@@ -397,11 +386,8 @@ public class RuleService {
     }
 
     private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            return "{}";
-        }
+        try { return objectMapper.writeValueAsString(obj); }
+        catch (Exception e) { return "{}"; }
     }
 
     private String buildEntityName(ValidationRule rule) {
@@ -440,8 +426,8 @@ public class RuleService {
                 .description(rule.getDescription())
                 .createdAt(rule.getCreatedAt())
                 .updatedAt(rule.getUpdatedAt())
-                .createdByName(rule.getCreatedByName())
-                .updatedByName(rule.getUpdatedByName())
+                .createdByName(rule.getCreatedBy())    // created_by stores username now
+                .updatedByName(rule.getUpdatedBy())
                 .allowedValues(values)
                 .build();
     }

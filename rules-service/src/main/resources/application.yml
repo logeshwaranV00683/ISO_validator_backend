@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate          # was "update" — validate is correct, never update
     show-sql: true
     properties:
       hibernate:

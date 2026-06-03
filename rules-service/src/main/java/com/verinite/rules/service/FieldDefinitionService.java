@@ -34,7 +34,7 @@ public class FieldDefinitionService {
     public FieldDefinitionDto create(CreateFieldDefinitionRequest req) {
         validateRequired(req);
 
-        if (fieldDefinitionRepository.existsByProfileIdAndMtiAndDeNumberAndIsDeletedFalse(
+        if (fieldDefinitionRepository.existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
                 req.getProfileId(), req.getMti(), req.getDeNumber())) {
             throw new IllegalStateException(
                     "FieldDefinition already exists for profileId=" + req.getProfileId()
@@ -43,7 +43,7 @@ public class FieldDefinitionService {
             );
         }
 
-        FieldDefinition fd = buildEntityFromRequest(req);
+        FieldDefinition fd    = buildEntityFromRequest(req);
         FieldDefinition saved = fieldDefinitionRepository.save(fd);
 
         publishAudit("CREATE", "FIELD_DEFINITION", saved.getId(),
@@ -58,7 +58,7 @@ public class FieldDefinitionService {
 
     public List<FieldDefinitionDto> getVisibleFields(Long profileId, String mti) {
         return fieldDefinitionRepository
-                .findByProfileIdAndMtiAndIsBuilderVisibleTrueAndIsDeletedFalse(profileId, mti)
+                .findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNull(profileId, mti)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -71,11 +71,11 @@ public class FieldDefinitionService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // READ — all fields including hidden (internal engine use)
+    // READ — all fields including hidden (internal engine)
     // ═══════════════════════════════════════════════════════════════════════
 
     public List<FieldDefinition> getByProfileAndMti(Long profileId, String mti) {
-        return fieldDefinitionRepository.findByProfileIdAndMtiAndIsDeletedFalse(profileId, mti);
+        return fieldDefinitionRepository.findByProfileIdAndMtiAndDeletedAtIsNull(profileId, mti);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -96,10 +96,9 @@ public class FieldDefinitionService {
         if (req.getPlaceholderValue() != null) fd.setPlaceholderValue(req.getPlaceholderValue());
         if (req.getDisplayOrder()     != null) fd.setDisplayOrder(req.getDisplayOrder());
         if (req.getIsBuilderVisible() != null) fd.setIsBuilderVisible(req.getIsBuilderVisible());
-        if (req.getIsActive()         != null) fd.setIsActive(req.getIsActive());
+        if (req.getIsActive()         != null) fd.setActive(req.getIsActive()); // entity field is "active"
 
-        fd.setUpdatedBy(UserContext.getUserId());
-        fd.setUpdatedByName(UserContext.getUsername());
+        fd.setUpdatedBy(UserContext.getUsername());   // String
 
         FieldDefinition saved = fieldDefinitionRepository.save(fd);
 
@@ -110,7 +109,7 @@ public class FieldDefinitionService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SOFT DELETE
+    // SOFT DELETE — set deleted_at, no is_deleted field
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -118,10 +117,9 @@ public class FieldDefinitionService {
         FieldDefinition fd     = findOrThrow(id);
         String          before = toJson(fd);
 
-        fd.setIsDeleted(true);
-        fd.setIsActive(false);
-        fd.setUpdatedBy(UserContext.getUserId());
-        fd.setUpdatedByName(UserContext.getUsername());
+        fd.setDeletedAt(LocalDateTime.now());   // deleted_at IS NOT NULL = deleted
+        fd.setActive(false);                    // entity field is "active"
+        fd.setUpdatedBy(UserContext.getUsername());
 
         fieldDefinitionRepository.save(fd);
 
@@ -130,7 +128,7 @@ public class FieldDefinitionService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BULK IMPORT — single transaction, MERGE or REPLACE strategy
+    // BULK IMPORT
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -138,7 +136,7 @@ public class FieldDefinitionService {
         int imported = 0, updated = 0;
 
         List<FieldDefinition> existing = fieldDefinitionRepository
-                .findByProfileIdAndMtiAndIsDeletedFalse(req.getProfileId(), req.getMti());
+                .findByProfileIdAndMtiAndDeletedAtIsNull(req.getProfileId(), req.getMti());
 
         Map<String, FieldDefinition> existingByDeNumber = existing.stream()
                 .collect(Collectors.toMap(FieldDefinition::getDeNumber, f -> f, (a, b) -> a));
@@ -150,8 +148,8 @@ public class FieldDefinitionService {
 
             for (FieldDefinition f : existing) {
                 if (!incomingDeNumbers.contains(f.getDeNumber())) {
-                    f.setIsDeleted(true);
-                    f.setIsActive(false);
+                    f.setDeletedAt(LocalDateTime.now());
+                    f.setActive(false);
                     fieldDefinitionRepository.save(f);
                 }
             }
@@ -168,9 +166,9 @@ public class FieldDefinitionService {
             if (defReq.getDisplayOrder() == null) defReq.setDisplayOrder(i);
 
             if (existingByDeNumber.containsKey(defReq.getDeNumber())) {
-                FieldDefinition existing_fd = existingByDeNumber.get(defReq.getDeNumber());
-                applyBulkUpdate(existing_fd, defReq);
-                toSave.add(existing_fd);
+                FieldDefinition existingFd = existingByDeNumber.get(defReq.getDeNumber());
+                applyBulkUpdate(existingFd, defReq);
+                toSave.add(existingFd);
                 updated++;
             } else {
                 toSave.add(buildEntityFromRequest(defReq));
@@ -195,12 +193,13 @@ public class FieldDefinitionService {
     // ═══════════════════════════════════════════════════════════════════════
 
     private FieldDefinition findOrThrow(Long id) {
-        return fieldDefinitionRepository.findByIdAndIsDeletedFalse(id)
+        return fieldDefinitionRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new EntityNotFoundException("FieldDefinition not found: " + id));
     }
 
     private void validateRequired(CreateFieldDefinitionRequest req) {
-        if (req.getProfileId()   == null) throw new IllegalArgumentException("profileId is required");
+        if (req.getProfileId() == null)
+            throw new IllegalArgumentException("profileId is required");
         if (req.getProfileName() == null || req.getProfileName().isBlank())
             throw new IllegalArgumentException("profileName is required");
         if (req.getMti() == null || req.getMti().isBlank())
@@ -223,10 +222,8 @@ public class FieldDefinitionService {
                 .displayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder()     : 0)
                 .isBuilderVisible(req.getIsBuilderVisible() != null
                         ? req.getIsBuilderVisible() : true)
-                .isActive(req.getIsActive()         != null ? req.getIsActive()         : true)
-                .isDeleted(false)
-                .createdBy(UserContext.getUserId())
-                .createdByName(UserContext.getUsername())
+                .active(req.getIsActive() != null ? req.getIsActive() : true) // entity field "active"
+                .createdBy(UserContext.getUsername())   // String
                 .build();
     }
 
@@ -240,9 +237,8 @@ public class FieldDefinitionService {
         if (req.getPlaceholderValue() != null) fd.setPlaceholderValue(req.getPlaceholderValue());
         if (req.getDisplayOrder()     != null) fd.setDisplayOrder(req.getDisplayOrder());
         if (req.getIsBuilderVisible() != null) fd.setIsBuilderVisible(req.getIsBuilderVisible());
-        if (req.getIsActive()         != null) fd.setIsActive(req.getIsActive());
-        fd.setUpdatedBy(UserContext.getUserId());
-        fd.setUpdatedByName(UserContext.getUsername());
+        if (req.getIsActive()         != null) fd.setActive(req.getIsActive());
+        fd.setUpdatedBy(UserContext.getUsername());
     }
 
     private void publishAudit(String action, String entityType,
@@ -297,11 +293,11 @@ public class FieldDefinitionService {
                 .placeholderValue(fd.getPlaceholderValue())
                 .displayOrder(fd.getDisplayOrder())
                 .isBuilderVisible(fd.getIsBuilderVisible())
-                .isActive(fd.getIsActive())
+                .isActive(fd.getActive())           // entity "active" → DTO "isActive"
                 .createdAt(fd.getCreatedAt())
                 .updatedAt(fd.getUpdatedAt())
-                .createdByName(fd.getCreatedByName())
-                .updatedByName(fd.getUpdatedByName())
+                .createdByName(fd.getCreatedBy())   // created_by stores username now
+                .updatedByName(fd.getUpdatedBy())
                 .build();
     }
 }
