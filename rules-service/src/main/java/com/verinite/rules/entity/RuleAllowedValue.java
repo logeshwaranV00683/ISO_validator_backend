@@ -16,7 +16,7 @@ public class RuleAllowedValue {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "value_id")
+    @Column(name = "id")                          // schema PK is "id", not "value_id"
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -24,7 +24,7 @@ public class RuleAllowedValue {
     @JsonIgnore
     private ValidationRule rule;
 
-    @Column(name = "allowed_value", nullable = false, length = 100)
+    @Column(name = "allowed_value", nullable = false, length = 255)  // schema is VARCHAR(255)
     private String allowedValue;
 
     @Column(name = "value_label", length = 255)
@@ -37,18 +37,12 @@ public class RuleAllowedValue {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "created_by", nullable = false)
-    @Builder.Default
-    private Long createdBy = 0L;
-
-    @Column(name = "created_by_name", nullable = false, length = 100)
-    @Builder.Default
-    private String createdByName = "system";
+    @Column(name = "created_by", length = 50)     // schema VARCHAR(50), not BIGINT
+    private String createdBy;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        if (createdBy == null)     createdBy = 0L;
-        if (createdByName == null) createdByName = "system";
+        if (createdBy == null) createdBy = "system";
     }
 }

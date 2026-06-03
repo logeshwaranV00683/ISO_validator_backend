@@ -8,19 +8,19 @@ import java.util.Optional;
 
 public interface FieldDefinitionRepository extends JpaRepository<FieldDefinition, Long> {
 
-    // Public API — visible fields only
-    List<FieldDefinition> findByProfileIdAndMtiAndIsBuilderVisibleTrueAndIsDeletedFalse(
+    // Public API — builder-visible, alive only
+    List<FieldDefinition> findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNull(
             Long profileId, String mti
     );
 
-    // Internal engine use — ALL non-deleted (including hidden fields)
-    List<FieldDefinition> findByProfileIdAndMtiAndIsDeletedFalse(
+    // Internal engine — all alive fields including hidden
+    List<FieldDefinition> findByProfileIdAndMtiAndDeletedAtIsNull(
             Long profileId, String mti
     );
 
-    Optional<FieldDefinition> findByIdAndIsDeletedFalse(Long id);
+    Optional<FieldDefinition> findByIdAndDeletedAtIsNull(Long id);
 
-    boolean existsByProfileIdAndMtiAndDeNumberAndIsDeletedFalse(
+    boolean existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
             Long profileId, String mti, String deNumber
     );
 }

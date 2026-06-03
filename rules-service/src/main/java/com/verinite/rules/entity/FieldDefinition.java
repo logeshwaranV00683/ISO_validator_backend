@@ -14,7 +14,7 @@ public class FieldDefinition {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "definition_id")
+    @Column(name = "id")                          // schema PK is "id", not "definition_id"
     private Long id;
 
     @Column(name = "profile_id", nullable = false)
@@ -36,7 +36,7 @@ public class FieldDefinition {
     @Column(name = "data_type", nullable = false, length = 20)
     private String dataType;
 
-    @Column(name = "max_length", nullable = false)
+    @Column(name = "max_length")
     private Integer maxLength;
 
     @Column(name = "is_llvar", nullable = false)
@@ -62,13 +62,13 @@ public class FieldDefinition {
     @Builder.Default
     private Boolean isBuilderVisible = true;
 
-    @Column(name = "is_active", nullable = false)
+    @Column(name = "active", nullable = false)    // schema column is "active", not "is_active"
     @Builder.Default
-    private Boolean isActive = true;
+    private Boolean active = true;
 
-    @Column(name = "is_deleted", nullable = false)
-    @Builder.Default
-    private Boolean isDeleted = false;
+    // Soft-delete = deletedAt IS NULL means alive. No is_deleted in schema.
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -76,26 +76,17 @@ public class FieldDefinition {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "created_by", nullable = false)
-    @Builder.Default
-    private Long createdBy = 0L;
+    @Column(name = "created_by", length = 50)     // schema VARCHAR(50), not BIGINT
+    private String createdBy;
 
-    @Column(name = "created_by_name", nullable = false, length = 100)
-    @Builder.Default
-    private String createdByName = "system";
-
-    @Column(name = "updated_by")
-    private Long updatedBy;
-
-    @Column(name = "updated_by_name", length = 100)
-    private String updatedByName;
+    @Column(name = "updated_by", length = 50)     // schema VARCHAR(50), not BIGINT
+    private String updatedBy;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (createdBy == null)     createdBy = 0L;
-        if (createdByName == null) createdByName = "system";
+        if (createdBy == null) createdBy = "system";
     }
 
     @PreUpdate

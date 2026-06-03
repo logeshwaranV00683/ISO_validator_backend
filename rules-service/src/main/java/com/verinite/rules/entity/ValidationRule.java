@@ -19,7 +19,7 @@ public class ValidationRule {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "rule_id")
+    @Column(name = "id")                        // schema PK is "id", not "rule_id"
     private Long id;
 
     @Column(name = "profile_id", nullable = false)
@@ -54,7 +54,7 @@ public class ValidationRule {
     @Column(name = "data_type", nullable = false, length = 20)
     private String dataType;
 
-    @Column(name = "pattern_regex", length = 500)
+    @Column(name = "pattern_regex", length = 500) // EXISTS in schema, used for Java regex validation
     private String patternRegex;
 
     // CRITICAL | WARNING | INFO
@@ -66,7 +66,7 @@ public class ValidationRule {
     @Builder.Default
     private Integer priority = 1;
 
-    @Column(name = "is_active", nullable = false)
+    @Column(name = "active", nullable = false)    // schema column is "active", not "is_active"
     @Builder.Default
     private Boolean active = true;
 
@@ -79,9 +79,9 @@ public class ValidationRule {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "is_deleted", nullable = false)
-    @Builder.Default
-    private Boolean isDeleted = false;
+    // Soft-delete = deletedAt IS NULL means alive. Schema has deleted_at, NOT is_deleted.
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -89,22 +89,11 @@ public class ValidationRule {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "created_by", length = 50)     // schema VARCHAR(50), not BIGINT
+    private String createdBy;
 
-    @Column(name = "created_by", nullable = false)
-    @Builder.Default
-    private Long createdBy = 0L;
-
-    @Column(name = "created_by_name", nullable = false, length = 100)
-    @Builder.Default
-    private String createdByName = "system";
-
-    @Column(name = "updated_by")
-    private Long updatedBy;
-
-    @Column(name = "updated_by_name", length = 100)
-    private String updatedByName;
+    @Column(name = "updated_by", length = 50)     // schema VARCHAR(50), not BIGINT
+    private String updatedBy;
 
     @OneToMany(mappedBy = "rule", cascade = CascadeType.ALL,
             fetch = FetchType.EAGER, orphanRemoval = true)
@@ -115,8 +104,7 @@ public class ValidationRule {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (createdBy == null) createdBy = 0L;
-        if (createdByName == null) createdByName = "system";
+        if (createdBy == null) createdBy = "system";
     }
 
     @PreUpdate
