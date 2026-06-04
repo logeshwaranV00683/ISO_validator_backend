@@ -46,10 +46,13 @@ public class RuleEventPublisher {
 
     public void publishAudit(AuditEvent event) {
         // Topic routing key: audit.rule.create / audit.rule.update / audit.field_definition.delete …
-        String entityPart = event.getPayload().getEntityType().toLowerCase().replace("_", ".");
-        String actionPart = event.getPayload().getAction().toLowerCase();
+        String entityPart = event.getPayload().getEntityType() != null
+                ? event.getPayload().getEntityType().toLowerCase().replace("_", ".")
+                : "unknown";
+        String actionPart = event.getPayload().getAction() != null
+                ? event.getPayload().getAction().toLowerCase()
+                : "unknown";
         String routingKey = "audit." + entityPart + "." + actionPart;
-
         rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, routingKey, event);
         log.info("[MQ] Audit published — action={} entityType={} entityId={}",
                 event.getPayload().getAction(),

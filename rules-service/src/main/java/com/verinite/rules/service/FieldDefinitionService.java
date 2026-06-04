@@ -96,7 +96,8 @@ public class FieldDefinitionService {
         if (req.getPlaceholderValue() != null) fd.setPlaceholderValue(req.getPlaceholderValue());
         if (req.getDisplayOrder()     != null) fd.setDisplayOrder(req.getDisplayOrder());
         if (req.getIsBuilderVisible() != null) fd.setIsBuilderVisible(req.getIsBuilderVisible());
-        if (req.getIsActive()         != null) fd.setActive(req.getIsActive()); // entity field is "active"
+        if (req.getIsActive()         != null) fd.setActive(req.getIsActive());
+        if (req.getDescription() != null) fd.setDescription(req.getDescription());// entity field is "active"
 
         fd.setUpdatedBy(UserContext.getUsername());   // String
 
@@ -223,7 +224,8 @@ public class FieldDefinitionService {
                 .isBuilderVisible(req.getIsBuilderVisible() != null
                         ? req.getIsBuilderVisible() : true)
                 .active(req.getIsActive() != null ? req.getIsActive() : true) // entity field "active"
-                .createdBy(UserContext.getUsername())   // String
+                .createdBy(UserContext.getUsername())
+                .description(req.getDescription())
                 .build();
     }
 
@@ -238,6 +240,7 @@ public class FieldDefinitionService {
         if (req.getDisplayOrder()     != null) fd.setDisplayOrder(req.getDisplayOrder());
         if (req.getIsBuilderVisible() != null) fd.setIsBuilderVisible(req.getIsBuilderVisible());
         if (req.getIsActive()         != null) fd.setActive(req.getIsActive());
+        if (req.getDescription() != null) fd.setDescription(req.getDescription());
         fd.setUpdatedBy(UserContext.getUsername());
     }
 
@@ -298,6 +301,7 @@ public class FieldDefinitionService {
                 .updatedAt(fd.getUpdatedAt())
                 .createdByName(fd.getCreatedBy())   // created_by stores username now
                 .updatedByName(fd.getUpdatedBy())
+                .description(fd.getDescription())
                 .build();
     }
 }
