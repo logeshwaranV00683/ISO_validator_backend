@@ -9,6 +9,11 @@ docker ps
 # Should show: iso-validator-redis and iso-validator-rabbitmq both "Up (healthy)" 
 ```
 
+If not in the local, you can use this command in your docker for the instalation 
+```
+docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:latest
+```
+
 # 2. Load the Schema into Your Local MySQL:
 Since MySQL is local (not in Docker), run schema manually:
 ```
