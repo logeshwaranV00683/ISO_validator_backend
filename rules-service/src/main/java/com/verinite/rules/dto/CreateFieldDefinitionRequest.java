@@ -1,5 +1,6 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
@@ -23,7 +24,7 @@ public class CreateFieldDefinitionRequest {
     @NotBlank(message = "dataType is required")
     @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special",
             message = "dataType must be: numeric | alpha | alphanumeric | binary | special")
-    private String dataType;
+    private DataType dataType;
 
     @NotNull(message = "maxLength is required")
     private Integer maxLength;
@@ -35,4 +36,5 @@ public class CreateFieldDefinitionRequest {
     private Integer displayOrder     = 0;
     private Boolean isBuilderVisible = true;
     private Boolean isActive         = true;
+    private String description;
 }

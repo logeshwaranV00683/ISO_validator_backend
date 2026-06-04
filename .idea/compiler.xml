@@ -18,13 +18,13 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="api-gateway" options="-parameters" />
-      <module name="auth-service" options="-parameters" />
-      <module name="common-lib" options="-parameters" />
-      <module name="config-server" options="-parameters" />
-      <module name="profile-service" options="-parameters" />
-      <module name="rules-service" options="-parameters" />
-      <module name="service-registry" options="-parameters" />
+      <module name="api-gateway" options="" />
+      <module name="auth-service" options="" />
+      <module name="common-lib" options="" />
+      <module name="config-server" options="" />
+      <module name="profile-service" options="" />
+      <module name="rules-service" options="" />
+      <module name="service-registry" options="" />
     </option>
   </component>
 </project>

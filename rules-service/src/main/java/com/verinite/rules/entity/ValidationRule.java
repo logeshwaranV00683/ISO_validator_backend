@@ -1,6 +1,8 @@
 package com.verinite.rules.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -51,16 +53,18 @@ public class ValidationRule {
     private Integer exactLength;
 
     // numeric | alpha | alphanumeric | binary | special
+    @Enumerated(EnumType.STRING)
     @Column(name = "data_type", nullable = false, length = 20)
-    private String dataType;
+    private DataType dataType;
 
     @Column(name = "pattern_regex", length = 500) // EXISTS in schema, used for Java regex validation
     private String patternRegex;
 
     // CRITICAL | WARNING | INFO
+    @Enumerated(EnumType.STRING)
     @Column(name = "severity", nullable = false, length = 10)
     @Builder.Default
-    private String severity = "CRITICAL";
+    private Severity severity = Severity.CRITICAL;
 
     @Column(name = "priority", nullable = false)
     @Builder.Default

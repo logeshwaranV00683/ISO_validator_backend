@@ -531,7 +531,7 @@ CREATE TABLE validation_run_fields (
   COMMENT='All DE fields parsed from a validation run. Cascade-deletes with run.';
 
 -- ================================================================
--- 16. validation_run_errors
+-- 17. validation_run_errors
 -- ================================================================
 CREATE TABLE validation_run_errors (
     id                  BIGINT          NOT NULL AUTO_INCREMENT,

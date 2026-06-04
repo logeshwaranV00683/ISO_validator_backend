@@ -1,5 +1,7 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import java.time.LocalDate;
@@ -16,12 +18,12 @@ public class UpdateRuleRequest {
     private Integer exactLength;
 
     @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special")
-    private String dataType;
+    private DataType dataType;
 
     private String patternRegex;
 
     @Pattern(regexp = "CRITICAL|WARNING|INFO")
-    private String severity;
+    private Severity severity;
 
     private Integer  priority;
     private Boolean  active;

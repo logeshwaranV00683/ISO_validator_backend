@@ -9,6 +9,26 @@ version: '3.8'
 # ================================================================
 
 services:
+#
+#  mysql:
+#    image: mysql:8.0
+#    container_name: iso-validator-mysql
+#    restart: unless-stopped
+#    ports:
+#      - "3306:3306"
+#    environment:
+#      MYSQL_ROOT_PASSWORD: root
+#      MYSQL_DATABASE: iso_validator_db
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+#      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+#    healthcheck:
+#      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
+#      start_period: 30s
 
   # ─────────────────────────────────────────────
   # Redis 7 — Rate limiting + Gateway route cache

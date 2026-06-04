@@ -1,5 +1,7 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,9 +23,9 @@ public class RuleDto {
     private Integer minLength;
     private Integer maxLength;
     private Integer exactLength;
-    private String  dataType;
+    private DataType dataType;
     private String  patternRegex;
-    private String  severity;
+    private Severity severity;
     private Integer priority;
     private Boolean active;
     private LocalDate effectiveFrom;

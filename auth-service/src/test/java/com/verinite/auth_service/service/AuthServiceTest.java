@@ -2,14 +2,13 @@ package com.verinite.auth_service.service;
 
 import com.verinite.auth_service.dto.LoginRequest;
 import com.verinite.auth_service.dto.LoginResponse;
-import com.verinite.auth_service.entity.Role;
 import com.verinite.auth_service.entity.User;
 import com.verinite.auth_service.entity.UserSession;
 import com.verinite.auth_service.exception.ResourceNotFoundException;
 import com.verinite.auth_service.repository.UserRepository;
 import com.verinite.auth_service.repository.UserSessionRepository;
-import com.verinite.auth_service.security.JwtTokenProvider;
 import com.verinite.auth_service.service.impl.AuthServiceImpl;
+import com.verinite.common.enums.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,9 +36,6 @@ class AuthServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
-
-    @Mock
-    private JwtTokenProvider jwtTokenProvider;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -73,9 +69,6 @@ class AuthServiceTest {
                 .thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed123"))
                 .thenReturn(true);
-        when(jwtTokenProvider.generateToken(
-                anyString(), anyString(), anyString()))
-                .thenReturn("mock.jwt.token");
         when(userRepository.save(any(User.class)))
                 .thenReturn(mockUser);
         when(userSessionRepository.save(any(UserSession.class)))

@@ -1,5 +1,6 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
@@ -11,7 +12,7 @@ public class UpdateFieldDefinitionRequest {
     private String  fieldName;
 
     @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special")
-    private String  dataType;
+    private DataType dataType;
 
     private Integer maxLength;
     private Boolean isLlvar;
@@ -21,4 +22,5 @@ public class UpdateFieldDefinitionRequest {
     private Integer displayOrder;
     private Boolean isBuilderVisible;
     private Boolean isActive;
+    private String description;
 }

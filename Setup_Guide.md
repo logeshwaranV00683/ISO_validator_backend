@@ -34,7 +34,7 @@ USE iso_validator_db;
 
 SHOW TABLES;                        -- must show 16 tables
 SELECT COUNT(*) FROM ollama_config; -- must return 9
-SELECT COUNT(*) FROM system_config; -- must return 4
+SELECT COUNT(*) FROM system_config; -- must return 6
 DESCRIBE validation_runs;           -- check run_reference column
 SHOW INDEX FROM validation_runs;    -- check idx_runs_reference exists
 ```

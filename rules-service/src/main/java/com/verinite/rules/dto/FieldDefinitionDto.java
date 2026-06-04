@@ -1,5 +1,6 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
 import lombok.*;
 import java.time.LocalDateTime;
 
@@ -15,7 +16,7 @@ public class FieldDefinitionDto {
     private String  mti;
     private String  deNumber;
     private String  fieldName;
-    private String  dataType;
+    private DataType dataType;
     private Integer maxLength;
     private Boolean isLlvar;
     private Boolean isLllvar;
@@ -28,4 +29,5 @@ public class FieldDefinitionDto {
     private LocalDateTime updatedAt;
     private String  createdByName;
     private String  updatedByName;
+    private String description;
 }

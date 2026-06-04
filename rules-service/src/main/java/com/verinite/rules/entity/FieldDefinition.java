@@ -1,6 +1,7 @@
 package com.verinite.rules.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.verinite.common.enums.DataType;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -33,8 +34,9 @@ public class FieldDefinition {
     private String fieldName;
 
     // numeric | alpha | alphanumeric | binary | special
+    @Enumerated(EnumType.STRING)
     @Column(name = "data_type", nullable = false, length = 20)
-    private String dataType;
+    private DataType dataType;
 
     @Column(name = "max_length")
     private Integer maxLength;
@@ -81,6 +83,9 @@ public class FieldDefinition {
 
     @Column(name = "updated_by", length = 50)     // schema VARCHAR(50), not BIGINT
     private String updatedBy;
+
+    @Column(name = "description", length = 255)
+    private String description;
 
     @PrePersist
     protected void onCreate() {

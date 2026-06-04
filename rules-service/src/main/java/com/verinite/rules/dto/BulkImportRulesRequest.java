@@ -1,9 +1,6 @@
 package com.verinite.rules.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import java.util.List;
 
@@ -26,6 +23,7 @@ public class BulkImportRulesRequest {
      * MERGE  = upsert — insert new, update existing (matched by deNumber)
      * REPLACE = soft-delete all existing for profile+mti, then insert all new
      */
+    @Pattern(regexp = "MERGE|REPLACE", message = "strategy must be MERGE or REPLACE")
     private String strategy = "MERGE";
 
     @NotEmpty(message = "rules list cannot be empty")
