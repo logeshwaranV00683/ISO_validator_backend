@@ -2,11 +2,11 @@ package com.verinite.auth_service.service;
 
 import com.verinite.auth_service.dto.CreateUserRequest;
 import com.verinite.auth_service.dto.UserDto;
-import com.verinite.auth_service.entity.Role;
 import com.verinite.auth_service.entity.User;
 import com.verinite.auth_service.exception.ResourceNotFoundException;
 import com.verinite.auth_service.repository.UserRepository;
 import com.verinite.auth_service.service.impl.UserServiceImpl;
+import com.verinite.common.enums.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

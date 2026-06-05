@@ -1,7 +1,6 @@
 package com.verinite.auth_service.dto;
 
-
-import com.verinite.auth_service.util.Role;
+import com.verinite.common.enums.Role;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;

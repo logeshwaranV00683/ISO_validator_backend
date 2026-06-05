@@ -2,11 +2,11 @@ package com.verinite.auth_service.service.impl;
 
 import com.verinite.auth_service.dto.CreateUserRequest;
 import com.verinite.auth_service.dto.UserDto;
-import com.verinite.auth_service.util.Role;
 import com.verinite.auth_service.entity.User;
 import com.verinite.auth_service.exception.ResourceNotFoundException;
 import com.verinite.auth_service.repository.UserRepository;
 import com.verinite.auth_service.service.UserService;
+import com.verinite.common.enums.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

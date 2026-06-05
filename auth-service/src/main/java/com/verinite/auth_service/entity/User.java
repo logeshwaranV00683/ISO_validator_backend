@@ -1,7 +1,7 @@
 package com.verinite.auth_service.entity;
 
-import com.verinite.auth_service.util.Role;
 import com.verinite.common.entity.BaseEntity;
+import com.verinite.common.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
 
