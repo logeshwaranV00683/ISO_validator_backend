@@ -2,7 +2,7 @@ spring:
   application:
     name: validation-engine
   datasource:
-    url: jdbc:mysql://localhost:3306/iso_validator_db?useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://localhost:3306/iso_validator_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
     password: root
   jpa:
@@ -23,6 +23,9 @@ spring:
     type: caffeine
     caffeine:
       spec: maximumSize=500,expireAfterWrite=30s
+    cache-names:
+      - profileFormats
+      - rulesCache
   cloud:
     config:
       enabled: false
