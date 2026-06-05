@@ -30,10 +30,10 @@ public class SwitchProfile {
     @Builder.Default
     private Environment environment = Environment.DEV;
 
-    @Column(name = "host", nullable = false)
+    @Column(name = "host")
     private String host;
 
-    @Column(name = "port", nullable = false)
+    @Column(name = "port")
     private Integer port;
 
     @Column(name = "timezone", nullable = false)
