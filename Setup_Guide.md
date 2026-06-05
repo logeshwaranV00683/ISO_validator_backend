@@ -9,6 +9,11 @@ docker ps
 # Should show: iso-validator-redis and iso-validator-rabbitmq both "Up (healthy)" 
 ```
 
+If not in the local, you can use this command in your docker for the instalation 
+```
+docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:latest
+```
+
 # 2. Load the Schema into Your Local MySQL:
 Since MySQL is local (not in Docker), run schema manually:
 ```
@@ -29,7 +34,7 @@ USE iso_validator_db;
 
 SHOW TABLES;                        -- must show 16 tables
 SELECT COUNT(*) FROM ollama_config; -- must return 9
-SELECT COUNT(*) FROM system_config; -- must return 4
+SELECT COUNT(*) FROM system_config; -- must return 6
 DESCRIBE validation_runs;           -- check run_reference column
 SHOW INDEX FROM validation_runs;    -- check idx_runs_reference exists
 ```

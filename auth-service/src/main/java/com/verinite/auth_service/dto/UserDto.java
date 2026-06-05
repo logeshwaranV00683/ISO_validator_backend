@@ -1,6 +1,6 @@
 package com.verinite.auth_service.dto;
 
-import com.verinite.auth_service.util.Role;
+import com.verinite.common.enums.Role;
 import lombok.Builder;
 import lombok.Data;
 

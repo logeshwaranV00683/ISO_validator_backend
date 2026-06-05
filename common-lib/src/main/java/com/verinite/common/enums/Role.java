@@ -1,4 +1,4 @@
-package com.verinite.auth_service.util;
+package com.verinite.common.enums;
 
 public enum Role {
     ADMIN,

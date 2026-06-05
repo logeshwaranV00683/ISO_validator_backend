@@ -44,7 +44,7 @@ eureka:
 # JWT — private key for signing (auth-service only)
 jwt:
   private-key-path: classpath:keys/private.pem
-  expiry-minutes: 60
+  expiration-ms: 3600000
 
 # Actuator
 management:

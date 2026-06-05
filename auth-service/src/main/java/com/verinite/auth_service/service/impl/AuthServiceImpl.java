@@ -185,6 +185,7 @@ public class AuthServiceImpl implements AuthService {
 
         session.setRevokedAt(LocalDateTime.now(ZoneOffset.UTC));
         session.setRevokeReason("LOGOUT");
+        session.setIsActive(false);
 
         sessionRepository.save(session);
 
