@@ -1,6 +1,8 @@
 package com.verinite.rules.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import com.verinite.rules.config.SecurityConfig;
 import com.verinite.rules.dto.RuleDto;
 import com.verinite.rules.entity.ValidationRule;
@@ -30,7 +32,8 @@ class RuleControllerTest {
     @Autowired MockMvc      mvc;
     @Autowired ObjectMapper json;
 
-    @MockBean RuleService        ruleService;
+    @MockBean
+    RuleService        ruleService;
     @MockBean RuleEventPublisher eventPublisher;
 
     private RuleDto     dto;
@@ -44,7 +47,7 @@ class RuleControllerTest {
         dto = RuleDto.builder()
                 .id(1L).profileId(1L).mti("0200")
                 .deNumber("DE7").fieldName("Tx Date")
-                .dataType("numeric").severity("CRITICAL")
+                .dataType(DataType.valueOf("numeric")).severity(Severity.valueOf("CRITICAL"))
                 .priority(1).active(true).build();
     }
 

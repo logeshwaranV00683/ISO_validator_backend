@@ -1,6 +1,8 @@
 package com.verinite.rules.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import com.verinite.rules.dto.CreateRuleRequest;
 import com.verinite.rules.dto.RuleDto;
 import com.verinite.rules.entity.ValidationRule;
@@ -41,8 +43,8 @@ class RuleServiceTest {
                 .id(1L).profileId(1L).profileName("Visa Switch")
                 .mti("0200").deNumber("DE7")
                 .fieldName("Transmission Date & Time")
-                .isMandatory(true).dataType("numeric")
-                .severity("CRITICAL").priority(1)
+                .isMandatory(true).dataType(DataType.valueOf("numeric"))
+                .severity(Severity.valueOf("CRITICAL")).priority(1)
                 .active(true).allowedValues(new ArrayList<>())
                 .build();
 
@@ -52,8 +54,8 @@ class RuleServiceTest {
         req.setMti("0200");
         req.setDeNumber("DE7");
         req.setFieldName("Transmission Date & Time");
-        req.setDataType("numeric");
-        req.setSeverity("CRITICAL");
+        req.setDataType(DataType.valueOf("numeric"));
+        req.setSeverity(Severity.valueOf("CRITICAL"));
         req.setIsMandatory(true);
         req.setAllowedValues(List.of());
 
@@ -95,7 +97,7 @@ class RuleServiceTest {
 
     @Test
     void getRuleById_found_returnsDto() {
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(rule));
+        when(ruleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(rule));
 
         RuleDto result = ruleService.getRuleById(1L);
 
@@ -105,7 +107,7 @@ class RuleServiceTest {
 
     @Test
     void getRuleById_notFound_throwsEntityNotFoundException() {
-        when(ruleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(ruleRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> ruleService.getRuleById(99L))
                 .isInstanceOf(EntityNotFoundException.class)
@@ -116,7 +118,7 @@ class RuleServiceTest {
 
     @Test
     void softDelete_success_setsDeletedAtAndDeactivates() {
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(rule));
+        when(ruleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(rule));
         when(ruleRepository.save(any())).thenReturn(rule);
 
         ruleService.softDelete(1L);
@@ -128,7 +130,7 @@ class RuleServiceTest {
 
     @Test
     void softDelete_notFound_throwsEntityNotFoundException() {
-        when(ruleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(ruleRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> ruleService.softDelete(99L))
                 .isInstanceOf(EntityNotFoundException.class);
