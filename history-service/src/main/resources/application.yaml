@@ -6,14 +6,14 @@ spring:
     name: history-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/history_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/iso_validator_db
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:

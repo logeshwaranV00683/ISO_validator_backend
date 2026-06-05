@@ -27,15 +27,16 @@ public class AuditLogConsumer {
         try {
             AuditLog auditLog = AuditLog.builder()
                     .userId(event.getUserId())
-                    .username(event.getUsername())
+                    .usernameSnapshot(event.getUsername())       // schema: username_snapshot
                     .userRole(event.getUserRole())
                     .sourceService(event.getSourceService())
                     .action(event.getAction())
                     .entityType(event.getEntityType())
-                    .entityId(event.getEntityId())
+                    .entityId(event.getEntityId() != null       // schema: VARCHAR(50)
+                            ? String.valueOf(event.getEntityId()) : null)
                     .entityName(event.getEntityName())
-                    .beforeValue(event.getBeforeValue())
-                    .afterValue(event.getAfterValue())
+                    .oldValue(event.getBeforeValue())           // schema: old_value
+                    .newValue(event.getAfterValue())            // schema: new_value
                     .description(event.getDescription())
                     .ipAddress(event.getIpAddress())
                     .correlationId(event.getCorrelationId())
@@ -43,8 +44,8 @@ public class AuditLogConsumer {
 
             auditLogRepository.save(auditLog);
 
-            log.info("[AuditConsumer] Saved | auditId={} action={} entityType={} entityId={}",
-                    auditLog.getAuditId(),
+            log.info("[AuditConsumer] Saved | id={} action={} entityType={} entityId={}",
+                    auditLog.getId(),
                     auditLog.getAction(),
                     auditLog.getEntityType(),
                     auditLog.getEntityId());

@@ -19,46 +19,38 @@ public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
 
-    // GET /api/v1/audit/logs
-    // Supports: action, entityType, userId, dateFrom, dateTo
     public Page<AuditLogResponse> listAuditLogs(
             String action, String entityType, Long userId,
             LocalDate dateFrom, LocalDate dateTo,
             int page, int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        Specification<AuditLog> spec = AuditLogSpec.filter(
-                action, entityType, userId, dateFrom, dateTo);
-
+        Specification<AuditLog> spec = AuditLogSpec.filter(action, entityType, userId, dateFrom, dateTo);
         return auditLogRepository.findAll(spec, pageable).map(this::toResponse);
     }
 
-    // GET /api/v1/audit/logs/{auditId}
-    public AuditLogResponse getById(Long auditId) {
-        AuditLog audit = auditLogRepository.findById(auditId)
-                .orElseThrow(() -> new RuntimeException("Audit log not found: " + auditId));
+    public AuditLogResponse getById(Long id) {
+        AuditLog audit = auditLogRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Audit log not found: " + id));
         return toResponse(audit);
     }
 
-    // ── Mapper ────────────────────────────────────────────────────────────────
-
     private AuditLogResponse toResponse(AuditLog a) {
         return AuditLogResponse.builder()
-                .auditId(a.getAuditId())
-                .userId(a.getUserId())
-                .username(a.getUsername())
-                .userRole(a.getUserRole())
-                .sourceService(a.getSourceService())
+                .auditId(a.getId())          // entity field is id, DTO field is auditId
                 .action(a.getAction())
                 .entityType(a.getEntityType())
                 .entityId(a.getEntityId())
                 .entityName(a.getEntityName())
-                .beforeValue(a.getBeforeValue())
-                .afterValue(a.getAfterValue())
+                .userId(a.getUserId())
+                .usernameSnapshot(a.getUsernameSnapshot())
+                .userRole(a.getUserRole())
+                .sourceService(a.getSourceService())
                 .description(a.getDescription())
-                .ipAddress(a.getIpAddress())
                 .correlationId(a.getCorrelationId())
+                .ipAddress(a.getIpAddress())
+                .oldValue(a.getOldValue())
+                .newValue(a.getNewValue())
                 .createdAt(a.getCreatedAt())
                 .build();
     }

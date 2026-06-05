@@ -13,19 +13,19 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class AuditLogResponse {
 
-    private Long auditId;
-    private Long userId;
-    private String username;
-    private String userRole;
-    private String sourceService;
+    private Long auditId;          // maps from entity id field
     private String action;
     private String entityType;
-    private Long entityId;
+    private String entityId;
     private String entityName;
-    private String beforeValue;
-    private String afterValue;
+    private Long userId;
+    private String usernameSnapshot;
+    private String userRole;
+    private String sourceService;
     private String description;
-    private String ipAddress;
     private String correlationId;
+    private String ipAddress;
+    private String oldValue;
+    private String newValue;
     private LocalDateTime createdAt;
 }
