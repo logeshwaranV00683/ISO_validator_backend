@@ -3,7 +3,7 @@ spring:
     name: rules-service
 
   config:
-    import: configserver:http://localhost:8888
+    import: "optional:configserver:http://localhost:8888"
 
   datasource:
     url: jdbc:mysql://localhost:3306/iso_validator_db

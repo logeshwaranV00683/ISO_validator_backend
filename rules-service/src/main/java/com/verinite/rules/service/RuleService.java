@@ -1,6 +1,7 @@
 package com.verinite.rules.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.verinite.common.enums.Severity;
 import com.verinite.rules.dto.*;
 import com.verinite.rules.entity.*;
 import com.verinite.rules.event.AuditEvent;
@@ -46,17 +47,25 @@ public class RuleService {
         }
 
         ValidationRule rule = buildEntityFromRequest(req);
-        ValidationRule saved = ruleRepository.save(rule);
 
-        saveAllowedValues(saved, req.getAllowedValues());
+// Add allowed values to the entity before save — cascade handles insert
+        if (req.getAllowedValues() != null) {
+            for (String v : req.getAllowedValues()) {
+                RuleAllowedValue av = RuleAllowedValue.builder()
+                        .rule(rule)
+                        .allowedValue(v)
+                        .createdBy(UserContext.getUsername())
+                        .build();
+                rule.getAllowedValues().add(av);
+            }
+        }
 
-        ValidationRule refreshed = ruleRepository.findByIdAndDeletedAtIsNull(saved.getId())
-                .orElse(saved);
+        ValidationRule saved = ruleRepository.save(rule);  // cascade saves allowed values too
 
         publishAudit("CREATE", "RULE", saved.getId(),
-                buildEntityName(saved), null, toJson(refreshed));
+                buildEntityName(saved), null, toJson(saved));
 
-        return toDto(refreshed);
+        return toDto(saved);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -325,7 +334,7 @@ public class RuleService {
                 .exactLength(req.getExactLength())
                 .dataType(req.getDataType())
                 .patternRegex(req.getPatternRegex())
-                .severity(req.getSeverity()  != null ? req.getSeverity()  : "CRITICAL")
+                .severity(req.getSeverity()  != null ? req.getSeverity()  : Severity.CRITICAL)
                 .priority(req.getPriority()  != null ? req.getPriority()  : 1)
                 .active(req.getIsActive()    != null ? req.getIsActive()  : true)
                 .effectiveFrom(req.getEffectiveFrom())

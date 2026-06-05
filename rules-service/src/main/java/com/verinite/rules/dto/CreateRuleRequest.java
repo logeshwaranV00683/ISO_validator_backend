@@ -1,5 +1,7 @@
 package com.verinite.rules.dto;
 
+import com.verinite.common.enums.DataType;
+import com.verinite.common.enums.Severity;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -32,13 +34,13 @@ public class CreateRuleRequest {
     @NotBlank(message = "dataType is required")
     @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special",
             message = "dataType must be: numeric | alpha | alphanumeric | binary | special")
-    private String dataType;
+    private DataType dataType;
 
     private String patternRegex;
 
     @Pattern(regexp = "CRITICAL|WARNING|INFO",
             message = "severity must be CRITICAL, WARNING, or INFO")
-    private String severity = "CRITICAL";
+    private Severity severity = Severity.CRITICAL;
 
     private Integer priority = 1;
 
