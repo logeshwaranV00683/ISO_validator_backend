@@ -1,4 +1,4 @@
-package com.verinite.validation.dto;
+package com.verinite.common.dto;
 
 import lombok.Builder;
 import lombok.Data;

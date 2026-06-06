@@ -1,4 +1,4 @@
-package com.verinite.rules.dto;
+package com.verinite.common.dto;
 
 import com.verinite.common.enums.DataType;
 import com.verinite.common.enums.Severity;

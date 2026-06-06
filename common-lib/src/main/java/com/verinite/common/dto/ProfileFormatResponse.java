@@ -1,4 +1,4 @@
-package com.verinite.profile.dto;
+package com.verinite.common.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
