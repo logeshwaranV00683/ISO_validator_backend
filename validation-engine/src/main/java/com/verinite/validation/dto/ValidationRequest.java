@@ -13,5 +13,13 @@ public class ValidationRequest {
     @NotBlank(message = "Hex message is required")
     private String hexMessage;
 
-    private String packager;  // optional — default iso87ascii
+    /** Optional custom packager — defaults to iso87ascii if null. */
+    private String packager;
+
+    /**
+     * Set to true to request AI explanation for validation errors.
+     * If false or Ollama is unreachable, aiExplanation will be null.
+     * Default: false (caller must explicitly opt in).
+     */
+    private boolean enableAi = false;
 }

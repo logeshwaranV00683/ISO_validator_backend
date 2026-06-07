@@ -7,8 +7,8 @@ spring:
     password: root
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     open-in-view: false
   rabbitmq:
     host: localhost
@@ -39,6 +39,47 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
     fetch-registry: true
     register-with-eureka: true
+
+# ── Feign configuration ──────────────────────────────────────────────────────
+feign:
+  circuitbreaker:
+    enabled: true       # enables Feign + Resilience4j integration (uses fallback class)
+  client:
+    config:
+      ai-service:
+        connectTimeout: 3000
+        readTimeout: 22000   # AI takes up to 20s; give 2s headroom
+
+# ── Resilience4j — Circuit Breakers ─────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Profile service CB
+      profile-cb:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+      # Rules service CB
+      rules-cb:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+      # AI service CB — CB open → AIServiceClientFallback returns null
+      ai-service:
+        slidingWindowSize: 5
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+  timelimiter:
+    instances:
+      ai-service:
+        timeoutDuration: 22s
+      profile-cb:
+        timeoutDuration: 5s
+      rules-cb:
+        timeoutDuration: 5s
 
 logging:
   level:

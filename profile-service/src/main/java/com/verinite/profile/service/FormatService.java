@@ -114,6 +114,14 @@ public class FormatService {
         );
     }
 
+    // Add to FormatService.java
+    public List<FormatDto> getAll() {
+        return formatRepo.findAllByDeletedAtIsNull()
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
     public FormatDto mapToDto(MessageFormat f) {
         return FormatDto.builder()
                 .id(f.getId())

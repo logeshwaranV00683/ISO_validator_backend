@@ -44,23 +44,25 @@ public class GlobalExceptionHandler {
         return error(403, "FORBIDDEN", "Insufficient role for this operation", null);
     }
 
+    // FIX: was returning ex.getMessage() in 500 response — internal details must not leak
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return error(500, "INTERNAL_ERROR", ex.getMessage(), null);
+        log.error("Unhandled exception in rules-service", ex);   // full trace in log only
+        return error(500, "INTERNAL_ERROR",
+                "An internal server error occurred. Please contact support.", null);
     }
 
     private ResponseEntity<Map<String, Object>> error(int status, String code,
                                                       String message, List<String> details) {
         var body = Map.<String, Object>of(
-                "success",   false,
-                "data",      null,
-                "error",     Map.of(
+                "success", false,
+                "data",    null,
+                "error",   Map.of(
                         "code",    code,
                         "message", message != null ? message : "",
                         "details", details != null ? details : List.of()
                 ),
-                "meta",      Map.of(
+                "meta", Map.of(
                         "timestamp", Instant.now().toString(),
                         "service",   "rules-service"
                 )

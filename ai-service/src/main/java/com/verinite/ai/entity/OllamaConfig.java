@@ -20,8 +20,9 @@ public class OllamaConfig {
     private String configValue;
 
     @Column(name = "config_type", nullable = false)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private ConfigType configType = ConfigType.valueOf("STRING");
+    private ConfigType configType = ConfigType.STRING;
 
     private String description;
 

@@ -15,4 +15,6 @@ public interface MessageFormatRepository extends JpaRepository<MessageFormat, Lo
     Optional<MessageFormat> findByIdAndDeletedAtIsNull(Long id);
 
     Optional<MessageFormat> findByProfileIdAndDeletedAtIsNull(Long profileId);
+
+    List<MessageFormat> findAllByDeletedAtIsNull();
 }

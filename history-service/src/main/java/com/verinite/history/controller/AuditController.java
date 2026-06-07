@@ -13,22 +13,26 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 
 @RestController
-@RequestMapping("/api/v1/audit")
+@RequestMapping("/audit")           // FIX: was /api/v1/audit — gateway routes /audit/**
 @RequiredArgsConstructor
 @Slf4j
 public class AuditController {
 
     private final AuditService auditService;
 
-    // GET /api/v1/audit/logs
-    // Filters: action, entityType, userId, dateFrom, dateTo
+    /**
+     * GET /audit/logs
+     * Paginated audit log. Filters: action, entityType, userId, dateFrom, dateTo.
+     */
     @GetMapping("/logs")
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> listAuditLogs(
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
@@ -38,7 +42,9 @@ public class AuditController {
         return ResponseEntity.ok(ApiResponse.success(result, "Audit logs fetched"));
     }
 
-    // GET /api/v1/audit/logs/{auditId}
+    /**
+     * GET /audit/logs/{auditId}
+     */
     @GetMapping("/logs/{auditId}")
     public ResponseEntity<ApiResponse<AuditLogResponse>> getById(
             @PathVariable Long auditId) {

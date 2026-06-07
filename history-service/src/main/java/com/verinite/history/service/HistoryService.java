@@ -5,6 +5,7 @@ import com.verinite.history.dto.response.HistorySummaryDTO;
 import com.verinite.history.entity.ValidationRun;
 import com.verinite.history.entity.ValidationRunError;
 import com.verinite.history.entity.ValidationRunField;
+import com.verinite.history.exception.NotFoundException;
 import com.verinite.history.repository.ValidationRunErrorRepository;
 import com.verinite.history.repository.ValidationRunFieldRepository;
 import com.verinite.history.repository.ValidationRunRepository;
@@ -16,6 +17,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -23,29 +25,40 @@ import java.util.List;
 @RequiredArgsConstructor
 public class HistoryService {
 
-    private final ValidationRunRepository runRepository;
+    private final ValidationRunRepository      runRepository;
     private final ValidationRunFieldRepository fieldRepository;
     private final ValidationRunErrorRepository errorRepository;
 
+    /**
+     * Paginated run list with all supported filters.
+     * FIX: dateFrom/dateTo were being silently ignored (always passed null to spec).
+     */
     public Page<HistorySummaryDTO> listRuns(
             Long profileId, String mti, String status, Long userId,
-            String responseCode, int page, int size, String sortBy, String sortDir) {
+            String responseCode,
+            LocalDate dateFrom, LocalDate dateTo,               // FIX: added
+            int page, int size, String sortBy, String sortDir) {
 
         Sort sort = sortDir.equalsIgnoreCase("asc")
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // FIX Bug 6: was runRepository.findAll(pageable) — filters were completely ignored
         Specification<ValidationRun> spec = ValidationRunSpec.filter(
-                profileId, userId, status, mti, null, null);
-        Page<ValidationRun> runs = runRepository.findAll(spec, pageable);
-        return runs.map(this::toSummary);
+                profileId, userId, status, mti,
+                dateFrom, dateTo);                              // FIX: now forwarded
+
+        return runRepository.findAll(spec, pageable)
+                .map(this::toSummary);
     }
 
+    /**
+     * Full run detail: parsed fields + errors + aiExplanation.
+     * run_id is NEVER exposed — only runReference crosses service boundaries.
+     */
     public HistoryDetailDTO getByRunReference(String runReference) {
         ValidationRun run = runRepository.findByRunReference(runReference)
-                .orElseThrow(() -> new RuntimeException("Run not found: " + runReference));
+                .orElseThrow(() -> new NotFoundException("Run not found: " + runReference));
 
         List<ValidationRunField> fields = fieldRepository.findByRunId(run.getId());
         List<ValidationRunError> errors = errorRepository.findByRunId(run.getId());
@@ -53,16 +66,16 @@ public class HistoryService {
         return toDetail(run, fields, errors);
     }
 
+    /** Soft delete — sets deletedAt timestamp. */
     public void softDelete(String runReference) {
         ValidationRun run = runRepository.findByRunReference(runReference)
-                .orElseThrow(() -> new RuntimeException("Run not found: " + runReference));
+                .orElseThrow(() -> new NotFoundException("Run not found: " + runReference));
 
-        // FIX Bug 7: guard against double-delete
         if (run.getDeletedAt() != null) {
-            throw new RuntimeException("Run already deleted: " + runReference);
+            throw new IllegalStateException("Run already deleted: " + runReference);
         }
 
-        run.setDeletedAt(java.time.LocalDateTime.now());
+        run.setDeletedAt(LocalDateTime.now());
         runRepository.save(run);
         log.info("Soft deleted run: {}", runReference);
     }

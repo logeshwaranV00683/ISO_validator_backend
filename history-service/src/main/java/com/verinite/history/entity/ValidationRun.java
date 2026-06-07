@@ -23,6 +23,11 @@ public class ValidationRun {
     @Column(name = "run_reference", nullable = false, unique = true, length = 30)
     private String runReference;
 
+    // FIX: rawMessage was missing — schema has raw_message LONGTEXT NOT NULL
+    // Without this, every INSERT throws a NOT NULL constraint violation.
+    @Column(name = "raw_message", nullable = false, columnDefinition = "LONGTEXT")
+    private String rawMessage;
+
     @Column(name = "profile_id")
     private Long profileId;
 
@@ -100,9 +105,6 @@ public class ValidationRun {
 
     @Column(name = "pan_masked", length = 25)
     private String panMasked;
-
-    @Column(name = "hex_message_hash", length = 64)
-    private String hexMessageHash;
 
     @Column(name = "parse_duration_ms")
     private Integer parseDurationMs;

@@ -27,10 +27,15 @@ public class AiTemplateService {
     private final AiPromptTemplateRepository        templateRepo;
     private final AiPromptTemplateVersionRepository versionRepo;
 
+    // ── CRUD ────────────────────────────────────────────────────────────────
+
     @Transactional
     public AiPromptTemplate create(AiPromptTemplate template, String createdBy) {
         template.setCreatedBy(createdBy);
+        template.setCurrentVersion(1);
         AiPromptTemplate saved = templateRepo.save(template);
+
+        // Insert version row 1 as current
         versionRepo.save(AiPromptTemplateVersion.builder()
                 .templateId(saved.getId())
                 .versionNumber(1)
@@ -39,11 +44,18 @@ public class AiTemplateService {
                 .isCurrent(true)
                 .createdBy(createdBy)
                 .build());
+
+        log.info("[Template] Created id={} scope={} profileId={}",
+                saved.getId(), saved.getScope(), saved.getProfileId());
         return saved;
     }
 
     public List<AiPromptTemplate> getAll() {
         return templateRepo.findAllByDeletedAtIsNull();
+    }
+
+    public List<AiPromptTemplate> getByScope(TemplateScope scope) {
+        return templateRepo.findByScopeAndDeletedAtIsNull(scope);
     }
 
     public AiPromptTemplate getById(Long id) {
@@ -52,34 +64,106 @@ public class AiTemplateService {
                 .orElseThrow(() -> new NotFoundException("Template not found: " + id));
     }
 
+    /**
+     * PUT /ai/templates/{id}
+     * Bumps currentVersion, marks the old version row as not-current,
+     * inserts a NEW version row as current, updates the template content.
+     */
     @Transactional
     public AiPromptTemplate update(Long id, AiPromptTemplate updated, String updatedBy) {
         AiPromptTemplate existing = getById(id);
         int newVersion = existing.getCurrentVersion() + 1;
 
+        // Mark previous current version as not-current
         versionRepo.findByTemplateIdAndIsCurrentTrue(id).ifPresent(v -> {
             v.setIsCurrent(false);
             versionRepo.save(v);
         });
+
+        // Insert new version row
         versionRepo.save(AiPromptTemplateVersion.builder()
                 .templateId(id)
                 .versionNumber(newVersion)
                 .promptContent(updated.getPromptTemplate())
-                .changeNote("Updated to version " + newVersion)
+                .changeNote(updated.getVariablesUsed() != null
+                        ? "Updated to v" + newVersion
+                        : "Updated to v" + newVersion)
                 .isCurrent(true)
                 .createdBy(updatedBy)
                 .build());
 
+        // Update the main template row
         existing.setTemplateName(updated.getTemplateName());
         existing.setScope(updated.getScope());
         existing.setProfileId(updated.getProfileId());
         existing.setProfileName(updated.getProfileName());
         existing.setPromptTemplate(updated.getPromptTemplate());
         existing.setVariablesUsed(updated.getVariablesUsed());
-        existing.setActive(updated.getActive());
+        existing.setActive(updated.getActive() != null ? updated.getActive() : existing.getActive());
         existing.setCurrentVersion(newVersion);
         existing.setUpdatedBy(updatedBy);
-        return templateRepo.save(existing);
+
+        AiPromptTemplate saved = templateRepo.save(existing);
+        log.info("[Template] Updated id={} newVersion={}", id, newVersion);
+        return saved;
+    }
+
+    /**
+     * PUT /ai/templates/{id}/rollback
+     * Restores the content of (currentVersion - 1) by creating a NEW version
+     * (currentVersion + 1) with the old content. Version history is preserved.
+     *
+     * Example: current=3 → find version 2 content → create version 4 with v2 content.
+     */
+    @Transactional
+    public AiPromptTemplate rollback(Long id, String updatedBy) {
+        AiPromptTemplate existing = getById(id);
+        int currentVersion = existing.getCurrentVersion();
+
+        if (currentVersion <= 1) {
+            throw new NotFoundException("No previous version to rollback to for template id=" + id);
+        }
+
+        int targetVersion = currentVersion - 1;
+
+        // Get the content of the previous version
+        AiPromptTemplateVersion prevVersion = versionRepo
+                .findByTemplateIdAndVersionNumber(id, targetVersion)
+                .orElseThrow(() -> new NotFoundException(
+                        "Version " + targetVersion + " not found for template id=" + id));
+
+        int newVersion = currentVersion + 1;
+
+        // Mark the current version as not-current
+        versionRepo.findByTemplateIdAndIsCurrentTrue(id).ifPresent(v -> {
+            v.setIsCurrent(false);
+            versionRepo.save(v);
+        });
+
+        // Create new version with old content (history-preserving rollback)
+        versionRepo.save(AiPromptTemplateVersion.builder()
+                .templateId(id)
+                .versionNumber(newVersion)
+                .promptContent(prevVersion.getPromptContent())
+                .changeNote("Rolled back to v" + targetVersion + " (now v" + newVersion + ")")
+                .isCurrent(true)
+                .createdBy(updatedBy)
+                .build());
+
+        // Update main template with the restored content
+        existing.setPromptTemplate(prevVersion.getPromptContent());
+        existing.setCurrentVersion(newVersion);
+        existing.setUpdatedBy(updatedBy);
+
+        AiPromptTemplate saved = templateRepo.save(existing);
+        log.info("[Template] Rolled back id={} from v{} to v{} (new v{})",
+                id, currentVersion, targetVersion, newVersion);
+        return saved;
+    }
+
+    public List<AiPromptTemplateVersion> getVersionHistory(Long id) {
+        getById(id); // validates the template exists and is not deleted
+        return versionRepo.findByTemplateIdOrderByVersionNumberDesc(id);
     }
 
     @Transactional
@@ -88,23 +172,37 @@ public class AiTemplateService {
         t.setDeletedAt(LocalDateTime.now());
         t.setUpdatedBy(deletedBy);
         templateRepo.save(t);
+        log.info("[Template] Soft-deleted id={}", id);
     }
 
-    // PROFILE first → GLOBAL fallback
+    // ── Scope resolution ────────────────────────────────────────────────────
+
+    /**
+     * Scope resolution: PROFILE-scope template → use it.
+     * If no PROFILE override exists → fall back to the GLOBAL template.
+     * This is called by OllamaService for every AI explanation request.
+     */
     public AiPromptTemplate resolveTemplate(Long profileId, String mti) {
+        // Try PROFILE-scope first
         if (profileId != null) {
             Optional<AiPromptTemplate> profileTemplate =
                     templateRepo.findByProfileIdAndActiveTrueAndDeletedAtIsNull(profileId);
             if (profileTemplate.isPresent()) {
-                log.debug("Using PROFILE template for profileId={}", profileId);
+                log.debug("[Template] Using PROFILE template for profileId={}", profileId);
                 return profileTemplate.get();
             }
         }
-        log.debug("No PROFILE template found, falling back to GLOBAL");
+        // Fall back to GLOBAL
+        log.debug("[Template] No PROFILE template for profileId={} — using GLOBAL fallback", profileId);
         return templateRepo.findFirstByScopeAndActiveTrueAndDeletedAtIsNull(TemplateScope.GLOBAL)
-                .orElseThrow(() -> new NotFoundException("No active GLOBAL template found"));
+                .orElseThrow(() -> new NotFoundException("No active GLOBAL prompt template found"));
     }
 
+    // ── Variable substitution ───────────────────────────────────────────────
+
+    /**
+     * Replaces {mti}, {profile}, {errors}, {fields} placeholders in the prompt.
+     */
     public String substituteVariables(String template, TemplateContext ctx) {
         return template
                 .replace("{mti}",     ctx.getMti()         != null ? ctx.getMti()         : "")
@@ -116,7 +214,11 @@ public class AiTemplateService {
     private String formatErrors(List<ValidationErrorDto> errors) {
         if (errors == null || errors.isEmpty()) return "No errors found.";
         return errors.stream()
-                .map(e -> String.format("[%s] %s — %s", e.getSeverity(), e.getDeNumber(), e.getErrorMessage()))
+                .map(e -> String.format("[%s] %s (%s) — %s",
+                        e.getSeverity() != null ? e.getSeverity() : "CRITICAL",
+                        e.getDeNumber()  != null ? e.getDeNumber()  : "?",
+                        e.getErrorCode() != null ? e.getErrorCode() : "",
+                        e.getErrorMessage()))
                 .collect(Collectors.joining("\n"));
     }
 

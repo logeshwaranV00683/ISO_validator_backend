@@ -39,8 +39,13 @@ public class ValidationRunConsumer {
         log.info("Consuming validation run event: runReference={}", runReference);
 
         try {
+            // FIX: rawMessage was never mapped — caused NOT NULL constraint violation on INSERT
+            String rawMessage = (String) event.get("rawMessage");
+            if (rawMessage == null) rawMessage = "";   // schema NOT NULL — use empty string as fallback
+
             ValidationRun run = ValidationRun.builder()
                     .runReference(runReference)
+                    .rawMessage(rawMessage)              // FIX: now mapped
                     .profileId(toLong(event.get("profileId")))
                     .profileNameSnapshot((String) event.get("profileNameSnapshot"))
                     .formatId(toLong(event.get("formatId")))
@@ -65,7 +70,6 @@ public class ValidationRunConsumer {
                     .merchantName((String) event.get("merchantName"))
                     .terminalId((String) event.get("terminalId"))
                     .panMasked((String) event.get("panMasked"))
-                    .hexMessageHash((String) event.get("hexMessageHash"))
                     .parseDurationMs(toInt(event.get("parseDurationMs"), null))
                     .validationDurationMs(toInt(event.get("validationDurationMs"), null))
                     .aiDurationMs(toInt(event.get("aiDurationMs"), null))
@@ -79,6 +83,7 @@ public class ValidationRunConsumer {
                     .correlationId((String) event.get("correlationId"))
                     .build();
 
+            @SuppressWarnings("unchecked")
             List<Map<String, Object>> parsedFields =
                     (List<Map<String, Object>>) event.get("parsedFields");
             if (parsedFields != null) {
@@ -98,6 +103,7 @@ public class ValidationRunConsumer {
                 }
             }
 
+            @SuppressWarnings("unchecked")
             List<Map<String, Object>> errors =
                     (List<Map<String, Object>>) event.get("errors");
             if (errors != null) {
@@ -133,18 +139,20 @@ public class ValidationRunConsumer {
         }
     }
 
+    // ── Conversion helpers ────────────────────────────────────────────────────
+
     private Long toLong(Object val) {
         if (val == null) return null;
-        if (val instanceof Long) return (Long) val;
+        if (val instanceof Long)    return (Long) val;
         if (val instanceof Integer) return ((Integer) val).longValue();
-        if (val instanceof Number) return ((Number) val).longValue();
+        if (val instanceof Number)  return ((Number) val).longValue();
         try { return Long.parseLong(val.toString()); } catch (Exception e) { return null; }
     }
 
     private Integer toInt(Object val, Integer defaultVal) {
         if (val == null) return defaultVal;
         if (val instanceof Integer) return (Integer) val;
-        if (val instanceof Number) return ((Number) val).intValue();
+        if (val instanceof Number)  return ((Number) val).intValue();
         try { return Integer.parseInt(val.toString()); } catch (Exception e) { return defaultVal; }
     }
 
