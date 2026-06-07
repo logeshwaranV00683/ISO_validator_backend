@@ -1,175 +1,209 @@
 package com.verinite.validation.engine;
 
+import com.verinite.validation.dto.AllowedValueDto;
+import com.verinite.validation.dto.EffectiveRuleDto;
+import com.verinite.validation.dto.ValidationErrorDTO;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class RulesEngineTest {
 
-    // ─── MANDATORY ────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-    @Test
-    void mandatory_FieldPresent_NoError() {
-        Map<Integer, String> fields = Map.of(2, "4532123456781234");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MANDATORY",
-                        "deField", "DE2", "ruleValue", ""));
-
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).isEmpty();
+    private EffectiveRuleDto rule(String deNumber, String fieldName) {
+        EffectiveRuleDto r = new EffectiveRuleDto();
+        r.setDeNumber(deNumber);
+        r.setFieldName(fieldName);
+        r.setSeverity("CRITICAL");
+        return r;
     }
 
-    @Test
-    void mandatory_FieldMissing_ReturnsError() {
-        Map<Integer, String> fields = new HashMap<>();
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MANDATORY",
-                        "deField", "DE2", "ruleValue", ""));
-
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).hasSize(1);
-        assertThat(errors.get(0)).contains("DE2")
-                .contains("mandatory");
+    private AllowedValueDto av(String val) {
+        AllowedValueDto a = new AllowedValueDto();
+        a.setAllowedValue(val);
+        return a;
     }
 
-    // ─── REGEX ────────────────────────────────────────────
+    // ── MANDATORY ─────────────────────────────────────────────────────────────
 
     @Test
-    void regex_FieldMatchesPattern_NoError() {
+    void mandatory_fieldPresent_noError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setIsMandatory(true);
         Map<Integer, String> fields = Map.of(3, "000000");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "REGEX",
-                        "deField", "DE3", "ruleValue", "\\d{6}"));
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
         assertThat(errors).isEmpty();
     }
 
     @Test
-    void regex_FieldNotMatchesPattern_ReturnsError() {
-        Map<Integer, String> fields = Map.of(3, "ABC123");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "REGEX",
-                        "deField", "DE3", "ruleValue", "\\d{6}"));
+    void mandatory_fieldMissing_oneError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setIsMandatory(true);
+        Map<Integer, String> fields = Map.of(); // DE3 absent
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
         assertThat(errors).hasSize(1);
-        assertThat(errors.get(0)).contains("DE3");
-    }
-
-    // ─── ALLOWED_VALUES ───────────────────────────────────
-
-    @Test
-    void allowedValues_ValueAllowed_NoError() {
-        Map<Integer, String> fields = Map.of(49, "356");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "ALLOWED_VALUES",
-                        "deField", "DE49", "ruleValue", "356,840,978"));
-
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).isEmpty();
+        assertThat(errors.get(0).getSeverity()).isEqualTo("CRITICAL");
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE3-MANDATORY");
     }
 
     @Test
-    void allowedValues_ValueNotAllowed_ReturnsError() {
-        Map<Integer, String> fields = Map.of(49, "999");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "ALLOWED_VALUES",
-                        "deField", "DE49", "ruleValue", "356,840,978"));
+    void mandatory_fieldBlank_oneError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setIsMandatory(true);
+        Map<Integer, String> fields = Map.of(3, "  ");
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
         assertThat(errors).hasSize(1);
-        assertThat(errors.get(0)).contains("DE49");
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE3-MANDATORY");
     }
 
-    // ─── MAX_LENGTH ───────────────────────────────────────
+    // ── MAX_LENGTH ────────────────────────────────────────────────────────────
 
     @Test
-    void maxLength_WithinLimit_NoError() {
-        Map<Integer, String> fields = Map.of(41, "12345678");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MAX_LENGTH",
-                        "deField", "DE41", "ruleValue", "8"));
+    void maxLength_withinLimit_noError() {
+        EffectiveRuleDto r = rule("DE4", "Transaction Amount");
+        r.setMaxLength(12);
+        Map<Integer, String> fields = Map.of(4, "000000010000"); // 12 chars
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).isEmpty();
+        assertThat(RulesEngine.evaluate(fields, List.of(r))).isEmpty();
     }
 
     @Test
-    void maxLength_ExceedsLimit_ReturnsError() {
-        Map<Integer, String> fields = Map.of(41, "123456789");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MAX_LENGTH",
-                        "deField", "DE41", "ruleValue", "8"));
+    void maxLength_exceeded_oneError() {
+        EffectiveRuleDto r = rule("DE4", "Transaction Amount");
+        r.setMaxLength(12);
+        Map<Integer, String> fields = Map.of(4, "0000000100001"); // 13 chars
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
         assertThat(errors).hasSize(1);
-        assertThat(errors.get(0)).contains("DE41")
-                .contains("max length");
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE4-MAX_LENGTH");
     }
 
-    // ─── MIN_LENGTH ───────────────────────────────────────
+    // ── MIN_LENGTH ────────────────────────────────────────────────────────────
 
     @Test
-    void minLength_AboveMinimum_NoError() {
-        Map<Integer, String> fields = Map.of(11, "123456");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MIN_LENGTH",
-                        "deField", "DE11", "ruleValue", "6"));
+    void minLength_tooShort_oneError() {
+        EffectiveRuleDto r = rule("DE11", "STAN");
+        r.setMinLength(6);
+        Map<Integer, String> fields = Map.of(11, "123"); // 3 chars
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).isEmpty();
-    }
-
-    @Test
-    void minLength_BelowMinimum_ReturnsError() {
-        Map<Integer, String> fields = Map.of(11, "123");
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MIN_LENGTH",
-                        "deField", "DE11", "ruleValue", "6"));
-
-        List<String> errors = RulesEngine.evaluate(fields, rules);
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
         assertThat(errors).hasSize(1);
-        assertThat(errors.get(0)).contains("DE11")
-                .contains("min length");
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE11-MIN_LENGTH");
     }
 
-    // ─── MULTIPLE RULES ───────────────────────────────────
+    // ── EXACT_LENGTH ──────────────────────────────────────────────────────────
 
     @Test
-    void multipleRules_AllPass_NoErrors() {
-        Map<Integer, String> fields = Map.of(
-                2, "4532123456781234",
-                3, "000000",
-                4, "000000010000");
+    void exactLength_wrongLength_oneError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setExactLength(6);
+        Map<Integer, String> fields = Map.of(3, "0000"); // 4 chars
 
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MANDATORY",
-                        "deField", "DE2", "ruleValue", ""),
-                Map.of("ruleType", "REGEX",
-                        "deField", "DE3", "ruleValue", "\\d{6}"),
-                Map.of("ruleType", "MANDATORY",
-                        "deField", "DE4", "ruleValue", ""));
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE3-EXACT_LENGTH");
+    }
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).isEmpty();
+    // ── REGEX ─────────────────────────────────────────────────────────────────
+
+    @Test
+    void regex_matches_noError() {
+        EffectiveRuleDto r = rule("DE11", "STAN");
+        r.setPatternRegex("\\d{6}");
+        Map<Integer, String> fields = Map.of(11, "000041");
+
+        assertThat(RulesEngine.evaluate(fields, List.of(r))).isEmpty();
     }
 
     @Test
-    void multipleRules_SomeFail_ReturnsMultipleErrors() {
-        Map<Integer, String> fields = Map.of(3, "ABC");
+    void regex_noMatch_oneError() {
+        EffectiveRuleDto r = rule("DE11", "STAN");
+        r.setPatternRegex("\\d{6}");
+        Map<Integer, String> fields = Map.of(11, "00004A"); // contains letter
 
-        List<Map<String, String>> rules = List.of(
-                Map.of("ruleType", "MANDATORY",
-                        "deField", "DE2", "ruleValue", ""),
-                Map.of("ruleType", "REGEX",
-                        "deField", "DE3", "ruleValue", "\\d{6}"));
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE11-REGEX");
+    }
 
-        List<String> errors = RulesEngine.evaluate(fields, rules);
-        assertThat(errors).hasSize(2);
+    // ── ALLOWED_VALUES ────────────────────────────────────────────────────────
+
+    @Test
+    void allowedValues_valueAllowed_noError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setAllowedValues(List.of(av("000000"), av("200000"), av("400000")));
+        Map<Integer, String> fields = Map.of(3, "000000");
+
+        assertThat(RulesEngine.evaluate(fields, List.of(r))).isEmpty();
+    }
+
+    @Test
+    void allowedValues_valueNotAllowed_oneError() {
+        EffectiveRuleDto r = rule("DE3", "Processing Code");
+        r.setAllowedValues(List.of(av("000000"), av("200000")));
+        Map<Integer, String> fields = Map.of(3, "999999");
+
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).getErrorCode()).isEqualTo("ERR-DE3-ALLOWED_VALUES");
+    }
+
+    // ── EDGE CASES ────────────────────────────────────────────────────────────
+
+    @Test
+    void mandatoryFails_skipOtherChecks_onlyOneError() {
+        // Mandatory fails → no MAX_LENGTH check should fire too
+        EffectiveRuleDto r = rule("DE2", "PAN");
+        r.setIsMandatory(true);
+        r.setMaxLength(19);
+        Map<Integer, String> fields = Map.of(); // DE2 absent
+
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
+        assertThat(errors).hasSize(1); // only MANDATORY, not MAX_LENGTH too
+    }
+
+    @Test
+    void fieldAbsentAndNotMandatory_noError() {
+        EffectiveRuleDto r = rule("DE48", "Additional Data");
+        r.setMaxLength(999);
+        Map<Integer, String> fields = Map.of(); // DE48 absent — optional
+
+        assertThat(RulesEngine.evaluate(fields, List.of(r))).isEmpty();
+    }
+
+    @Test
+    void emptyRules_alwaysPasses() {
+        Map<Integer, String> fields = Map.of(2, "4111111111111111", 3, "000000");
+        assertThat(RulesEngine.evaluate(fields, List.of())).isEmpty();
+    }
+
+    @Test
+    void severityWarning_propagatesCorrectly() {
+        EffectiveRuleDto r = rule("DE48", "Additional Data");
+        r.setIsMandatory(true);
+        r.setSeverity("WARNING");
+        Map<Integer, String> fields = Map.of();
+
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(fields, List.of(r));
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).getSeverity()).isEqualTo("WARNING");
+    }
+
+    @Test
+    void deNumberWithPrefix_parsedCorrectly() {
+        EffectiveRuleDto r = rule("DE2", "PAN");
+        r.setIsMandatory(true);
+        assertThat(RulesEngine.parseDeNumber("DE2")).isEqualTo(2);
+        assertThat(RulesEngine.parseDeNumber("de2")).isEqualTo(2);
+        assertThat(RulesEngine.parseDeNumber("2")).isEqualTo(2);
+        assertThat(RulesEngine.parseDeNumber("INVALID")).isEqualTo(-1);
+        assertThat(RulesEngine.parseDeNumber(null)).isEqualTo(-1);
     }
 }

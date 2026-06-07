@@ -1,103 +1,167 @@
 package com.verinite.validation.engine;
 
+import com.verinite.validation.dto.AllowedValueDto;
+import com.verinite.validation.dto.EffectiveRuleDto;
+import com.verinite.validation.dto.ValidationErrorDTO;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+/**
+ * Pure stateless rules engine — NO Spring beans, NO DB, NO I/O.
+ *
+ * Evaluation order per rule (priority-sorted by rules-service):
+ *   1. MANDATORY check  → if fails, skip remaining checks for that DE
+ *   2. EXACT_LENGTH
+ *   3. MIN_LENGTH
+ *   4. MAX_LENGTH
+ *   5. REGEX
+ *   6. ALLOWED_VALUES
+ *
+ * Returns List<ValidationErrorDTO> — empty = PASSED.
+ */
 @Slf4j
 public class RulesEngine {
 
-    // Rule types
-    public static final String MANDATORY = "MANDATORY";
-    public static final String REGEX = "REGEX";
-    public static final String ALLOWED_VALUES = "ALLOWED_VALUES";
-    public static final String MAX_LENGTH = "MAX_LENGTH";
-    public static final String MIN_LENGTH = "MIN_LENGTH";
+    private RulesEngine() { /* static utility */ }
 
-    /**
-     * Evaluate all rules against parsed DE fields
-     *
-     * @param parsedFields - Map of DE number → value
-     * @param rules        - List of rules to evaluate
-     * @return List of error messages (empty = VALID)
-     */
-    public static List<String> evaluate(
+    public static List<ValidationErrorDTO> evaluate(
             Map<Integer, String> parsedFields,
-            List<Map<String, String>> rules) {
+            List<EffectiveRuleDto> rules) {
 
-        List<String> errors = new ArrayList<>();
+        List<ValidationErrorDTO> errors = new ArrayList<>();
 
-        for (Map<String, String> rule : rules) {
-            String ruleType = rule.get("ruleType");
-            String deField = rule.get("deField");
-            String ruleValue = rule.get("ruleValue");
+        for (EffectiveRuleDto rule : rules) {
 
-            int deNumber;
-            try {
-                deNumber = Integer.parseInt(deField.replace("DE", ""));
-            } catch (NumberFormatException e) {
-                log.warn("Invalid DE field: {}", deField);
+            int deNumber = parseDeNumber(rule.getDeNumber());
+            if (deNumber < 0) {
+                log.warn("RulesEngine: skipping rule id={} — unparseable deNumber='{}'",
+                        rule.getId(), rule.getDeNumber());
                 continue;
             }
 
             String fieldValue = parsedFields.get(deNumber);
+            String deRef      = "DE" + deNumber;
+            String fieldName  = rule.getFieldName() != null ? rule.getFieldName() : deRef;
+            String severity   = normaliseSeverity(rule.getSeverity());
 
-            switch (ruleType) {
-                case MANDATORY -> {
-                    if (fieldValue == null || fieldValue.isBlank()) {
-                        errors.add(deField + " is mandatory but missing");
-                    }
+            // ── 1. MANDATORY ─────────────────────────────────────────────
+            if (Boolean.TRUE.equals(rule.getIsMandatory())) {
+                if (fieldValue == null || fieldValue.isBlank()) {
+                    errors.add(buildError(severity, "MANDATORY", deNumber, deRef, fieldName,
+                            deRef + " (" + fieldName + ") is mandatory but missing or blank"));
+                    continue; // no point checking other constraints if field absent
                 }
-                case REGEX -> {
-                    if (fieldValue != null && !fieldValue.isBlank()) {
-                        if (!fieldValue.matches(ruleValue)) {
-                            errors.add(deField + " does not match pattern: "
-                                    + ruleValue);
-                        }
-                    }
+            }
+
+            // Field absent & not mandatory → skip remaining checks
+            if (fieldValue == null || fieldValue.isBlank()) {
+                continue;
+            }
+
+            // ── 2. EXACT_LENGTH ──────────────────────────────────────────
+            if (rule.getExactLength() != null) {
+                if (fieldValue.length() != rule.getExactLength()) {
+                    errors.add(buildError(severity, "EXACT_LENGTH", deNumber, deRef, fieldName,
+                            deRef + " (" + fieldName + ") must be exactly "
+                                    + rule.getExactLength() + " chars (actual: "
+                                    + fieldValue.length() + ")"));
                 }
-                case ALLOWED_VALUES -> {
-                    if (fieldValue != null && !fieldValue.isBlank()) {
-                        String[] allowed = ruleValue.split(",");
-                        boolean found = false;
-                        for (String val : allowed) {
-                            if (val.trim().equals(fieldValue.trim())) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            errors.add(deField + " value '" + fieldValue
-                                    + "' not in allowed values: " + ruleValue);
-                        }
-                    }
+            }
+
+            // ── 3. MIN_LENGTH ────────────────────────────────────────────
+            if (rule.getMinLength() != null) {
+                if (fieldValue.length() < rule.getMinLength()) {
+                    errors.add(buildError(severity, "MIN_LENGTH", deNumber, deRef, fieldName,
+                            deRef + " (" + fieldName + ") below min length "
+                                    + rule.getMinLength() + " (actual: "
+                                    + fieldValue.length() + ")"));
                 }
-                case MAX_LENGTH -> {
-                    if (fieldValue != null) {
-                        int max = Integer.parseInt(ruleValue);
-                        if (fieldValue.length() > max) {
-                            errors.add(deField + " exceeds max length "
-                                    + max + " (actual: "
-                                    + fieldValue.length() + ")");
-                        }
-                    }
+            }
+
+            // ── 4. MAX_LENGTH ────────────────────────────────────────────
+            if (rule.getMaxLength() != null) {
+                if (fieldValue.length() > rule.getMaxLength()) {
+                    errors.add(buildError(severity, "MAX_LENGTH", deNumber, deRef, fieldName,
+                            deRef + " (" + fieldName + ") exceeds max length "
+                                    + rule.getMaxLength() + " (actual: "
+                                    + fieldValue.length() + ")"));
                 }
-                case MIN_LENGTH -> {
-                    if (fieldValue != null) {
-                        int min = Integer.parseInt(ruleValue);
-                        if (fieldValue.length() < min) {
-                            errors.add(deField + " below min length "
-                                    + min + " (actual: "
-                                    + fieldValue.length() + ")");
-                        }
+            }
+
+            // ── 5. REGEX ─────────────────────────────────────────────────
+            if (rule.getPatternRegex() != null && !rule.getPatternRegex().isBlank()) {
+                try {
+                    if (!fieldValue.matches(rule.getPatternRegex())) {
+                        errors.add(buildError(severity, "REGEX", deNumber, deRef, fieldName,
+                                deRef + " (" + fieldName + ") does not match pattern: "
+                                        + rule.getPatternRegex()));
                     }
+                } catch (Exception ex) {
+                    log.warn("RulesEngine: invalid regex in rule id={} deNumber={} pattern='{}': {}",
+                            rule.getId(), rule.getDeNumber(), rule.getPatternRegex(), ex.getMessage());
                 }
-                default -> log.warn("Unknown rule type: {}", ruleType);
+            }
+
+            // ── 6. ALLOWED_VALUES ─────────────────────────────────────────
+            List<AllowedValueDto> allowedValueDtos = rule.getAllowedValues();
+            if (allowedValueDtos != null && !allowedValueDtos.isEmpty()) {
+                Set<String> allowed = allowedValueDtos.stream()
+                        .filter(v -> v.getAllowedValue() != null)
+                        .map(v -> v.getAllowedValue().trim())
+                        .collect(Collectors.toSet());
+
+                if (!allowed.isEmpty() && !allowed.contains(fieldValue.trim())) {
+                    errors.add(buildError(severity, "ALLOWED_VALUES", deNumber, deRef, fieldName,
+                            deRef + " (" + fieldName + ") value '" + fieldValue
+                                    + "' not in allowed values: " + String.join(", ", allowed)));
+                }
             }
         }
 
         return errors;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Parse DE number from "DE2", "de2", or "2".
+     * Returns -1 on failure.
+     */
+    public static int parseDeNumber(String raw) {
+        if (raw == null) return -1;
+        try {
+            return Integer.parseInt(
+                    raw.toUpperCase().replace("DE", "").trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    private static String normaliseSeverity(String raw) {
+        if (raw == null) return "CRITICAL";
+        return switch (raw.toUpperCase()) {
+            case "WARNING", "WARN" -> "WARNING";
+            case "INFO"            -> "INFO";
+            default                -> "CRITICAL";
+        };
+    }
+
+    private static ValidationErrorDTO buildError(
+            String severity, String ruleType,
+            int deNumber, String deRef, String fieldName,
+            String message) {
+        return ValidationErrorDTO.builder()
+                .severity(severity)
+                .errorCode("ERR-" + deRef + "-" + ruleType)
+                .deNumber(deRef)
+                .deNumberInt(deNumber)
+                .fieldName(fieldName)
+                .message(message)
+                .build();
     }
 }

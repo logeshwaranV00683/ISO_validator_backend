@@ -5,19 +5,25 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Data
 @Builder
 public class ValidationResponse {
 
-    private String runReference;
-    private String status;           // VALID / INVALID
-    private Long profileId;
+    private String runReference;  // VLD-YYYYMMDD-00001
+    /** PASSED | FAILED | WARNED | PARSE_ERROR */
+    private String status;
+    private Long   profileId;
     private String mti;
-    private Map<Integer, String> parsedFields;
-    private List<String> errors;
-    private String aiExplanation;
+    /** Human-readable message — populated on PARSE_ERROR */
+    private String message;
+
+    private List<ParsedFieldDTO>   parsedFields;
+    private List<ValidationErrorDTO> errors;
+
+    private TimingDTO  timing;
+    private BitmapDTO  bitmap;
+    private AiResultDTO ai;
 
     @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();

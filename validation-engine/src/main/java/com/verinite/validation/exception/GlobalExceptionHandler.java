@@ -16,11 +16,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBadRequest(IllegalArgumentException ex) {
-        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage());
-    }
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
@@ -32,32 +27,31 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleForbidden(AccessDeniedException ex) {
-        return build(HttpStatus.FORBIDDEN, "FORBIDDEN",
-                "Insufficient role for this operation");
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Insufficient role");
     }
 
-    // RuntimeException covers "Invalid ISO8583 message: ..." from parser failures
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Void>> handleRuntime(RuntimeException ex) {
-        log.warn("RuntimeException in validation-engine: {}", ex.getMessage());
-        // Parse/validation errors are 400 — log message is safe (no PAN, already masked)
-        String message = ex.getMessage();
-        if (message != null && message.startsWith("Invalid ISO8583")) {
-            return build(HttpStatus.BAD_REQUEST, "PARSE_ERROR", message);
+        log.warn("RuntimeException: {}", ex.getMessage());
+        String msg = ex.getMessage();
+        if (msg != null && msg.startsWith("PROFILE_SERVICE_UNAVAILABLE")) {
+            return build(HttpStatus.SERVICE_UNAVAILABLE, "PROFILE_SERVICE_UNAVAILABLE", msg);
         }
-        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message);
+        if (msg != null && msg.startsWith("PROFILE_NOT_FOUND")) {
+            return build(HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND", msg);
+        }
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", msg);
     }
 
-    // Catch-all 500 — never expose internal details
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
         log.error("Unhandled exception in validation-engine", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "An internal server error occurred. Please contact support.");
+                "An internal server error occurred.");
     }
 
-    private ResponseEntity<ApiResponse<Void>> build(HttpStatus status, String code, String message) {
+    private ResponseEntity<ApiResponse<Void>> build(HttpStatus status, String code, String msg) {
         return ResponseEntity.status(status)
-                .body(ApiResponse.error(message != null ? message : "Unknown error", code));
+                .body(ApiResponse.error(msg != null ? msg : "Unknown error", code));
     }
 }

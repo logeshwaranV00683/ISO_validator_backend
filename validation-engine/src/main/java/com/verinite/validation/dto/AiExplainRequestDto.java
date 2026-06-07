@@ -6,11 +6,6 @@ import lombok.Data;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Request body sent to ai-service /internal/ai/explain.
- * Mirrors com.verinite.ai.dto.AiExplainRequest — kept as a separate DTO
- * so validation-engine has no compile dependency on ai-service classes.
- */
 @Data
 @Builder
 public class AiExplainRequestDto {
@@ -22,8 +17,7 @@ public class AiExplainRequestDto {
 
     /** Structured error list — maps from the string errors produced by RulesEngine. */
     private List<AiErrorDto> errors;
-
-    /** Parsed DE fields with PAN already masked. */
+    /** Parsed DE fields with PAN already masked — never send raw PAN to AI. */
     private Map<Integer, String> parsedFields;
 
     private String correlationId;
@@ -33,7 +27,7 @@ public class AiExplainRequestDto {
     public static class AiErrorDto {
         private String deNumber;
         private String fieldName;
-        private String severity;    // CRITICAL / WARNING / INFO
+        private String severity;
         private String errorCode;
         private String errorMessage;
     }

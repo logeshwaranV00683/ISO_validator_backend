@@ -2,23 +2,24 @@ package com.verinite.validation.service.impl;
 
 import com.verinite.common.util.PanMaskingUtil;
 import com.verinite.validation.client.AIServiceClient;
-import com.verinite.validation.dto.AiExplainRequestDto;
-import com.verinite.validation.dto.ValidationRequest;
-import com.verinite.validation.dto.ValidationResponse;
+import com.verinite.validation.client.RulesClient;
+import com.verinite.validation.dto.*;
 import com.verinite.validation.engine.RulesEngine;
+import com.verinite.validation.iso.PackagerCache;
+import com.verinite.validation.iso.ParsedMessage;
+import com.verinite.validation.messaging.ValidationRunPublisher;
+import com.verinite.validation.service.RunReferenceService;
 import com.verinite.validation.service.ValidationCacheService;
 import com.verinite.validation.service.ValidationService;
+import com.verinite.validation.util.IsoParserUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.jpos.iso.ISOMsg;
+import org.jpos.iso.ISOPackager;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,173 +28,378 @@ import java.util.stream.Collectors;
 public class ValidationServiceImpl implements ValidationService {
 
     private final ValidationCacheService cacheService;
+    private final PackagerCache          packagerCache;
     private final AIServiceClient        aiServiceClient;
-    private final RabbitTemplate         rabbitTemplate;
-    private final StringRedisTemplate    redisTemplate;
+    private final ValidationRunPublisher publisher;
+    private final RunReferenceService    runReferenceService;
+    private final RulesClient           rulesClient;
 
-    private static final String PACKAGER_PATH = "packager/iso87ascii.xml";
+    // ─────────────────────────────────────────────────────────────────────────
+    //  POST /api/v1/validate  — full 8-phase pipeline
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Override
-    public ValidationResponse validate(
-            ValidationRequest request,
-            String userId,
-            String correlationId) {
+    public ValidationResponse validate(ValidationRequest request,
+                                       String userId,
+                                       String correlationId) {
 
-        // ── Phase 1: Parse ISO message ─────────────────────────────────────
-        Map<Integer, String> parsedFields;
+        long totalStart = System.currentTimeMillis();
+        log.debug("[{}] validate: profileId={} enableAi={}", correlationId,
+                request.getProfileId(), request.isEnableAi());
+
+        // ── Phase 1: Fetch profile + format (Feign, Caffeine 30s cache) ──────
+        ProfileFormatResponseDto profileFormat;
         try {
-            parsedFields = com.verinite.validation.util.IsoParserUtil
-                    .parse(request.getHexMessage(), PACKAGER_PATH);
+            profileFormat = cacheService.getProfileFormat(request.getProfileId());
         } catch (Exception e) {
-            log.error("[{}] ISO parse failed: {}", correlationId, e.getMessage());
-            throw new RuntimeException("Invalid ISO8583 message: " + e.getMessage());
+            log.error("[{}] Profile service unavailable: {}", correlationId, e.getMessage());
+            throw new RuntimeException("PROFILE_SERVICE_UNAVAILABLE: " + e.getMessage());
         }
 
-        // ── Phase 2: Extract MTI ───────────────────────────────────────────
-        String mti = parsedFields.getOrDefault(0, "UNKNOWN");
-        log.debug("[{}] Parsed MTI={} profileId={}", correlationId, mti, request.getProfileId());
-
-        // ── Phase 3: Fetch profile format (Caffeine cached) ───────────────
-        Map<String, Object> formatData = cacheService.getProfileFormat(request.getProfileId());
-
-        // ── Phase 4: Fetch rules (Caffeine cached, 30s TTL) ───────────────
-        List<Map<String, Object>> rawRules = cacheService.getRules(request.getProfileId(), mti);
-
-        // ── Phase 5: Convert to engine format ─────────────────────────────
-        List<Map<String, String>> engineRules = rawRules.stream()
-                .map(r -> Map.of(
-                        "ruleType",  resolveRuleType(r),
-                        "deField",   String.valueOf(r.get("deNumber")),
-                        "ruleValue", resolveRuleValue(r)
-                ))
-                .toList();
-
-        // ── Phase 6: Evaluate rules — stateless, no I/O ───────────────────
-        List<String> errors = RulesEngine.evaluate(parsedFields, engineRules);
-        log.debug("[{}] Rule evaluation — {} error(s)", correlationId, errors.size());
-
-        // ── Phase 7: AI explanation (only if requested AND errors exist) ───
-        String aiExplanation = null;
-        if (request.isEnableAi() && !errors.isEmpty()) {
-            aiExplanation = callAiExplain(
-                    request.getProfileId(),
-                    mti,
-                    errors,
-                    PanMaskingUtil.maskFields(parsedFields),
-                    correlationId);
+        if (profileFormat == null || profileFormat.getXmlContent() == null) {
+            throw new RuntimeException(
+                    "PROFILE_NOT_FOUND: No active format for profileId=" + request.getProfileId());
         }
 
-        // ── Phase 8: Generate run_reference via Redis INCR ─────────────────
-        String runReference = generateRunReference();
-
-        // ── Phase 9: Publish async event (fire-and-forget) ────────────────
+        // ── Phase 2: Load / cache packager (PackagerCache, no TTL) ───────────
+        ISOPackager packager;
         try {
-            // FIX: use HashMap instead of Map.of() so we can include rawMessage
-            // (Map.of max is 10 entries; also, Map.of does not allow null values)
-            Map<String, Object> event = new HashMap<>();
-            event.put("runReference",   runReference);
-            event.put("rawMessage",     request.getHexMessage()); // FIX: was missing — schema raw_message NOT NULL
-            event.put("profileId",      request.getProfileId());
-            event.put("mti",            mti);
-            event.put("userId",         userId != null ? userId : "anonymous");
-            event.put("correlationId",  correlationId != null ? correlationId : "");
-            event.put("status",         errors.isEmpty() ? "VALID" : "INVALID");
-            event.put("errors",         errors);
-            event.put("parsedFields",   PanMaskingUtil.maskFields(parsedFields));
-            event.put("aiEnabled",      request.isEnableAi());
-            event.put("aiExplanation",  aiExplanation != null ? aiExplanation : "");
-
-            rabbitTemplate.convertAndSend("validation.events", "run.completed", event);
-            log.debug("[{}] Published validation event runRef={}", correlationId, runReference);
+            packager = packagerCache.get(profileFormat.getFormatId(), profileFormat.getXmlContent());
         } catch (Exception e) {
-            // MQ down — log and continue, never fail the validation response
-            log.warn("[{}] Failed to publish MQ event: {}", correlationId, e.getMessage());
+            log.error("[{}] PackagerCache load failed formatId={}: {}",
+                    correlationId, profileFormat.getFormatId(), e.getMessage());
+            throw new RuntimeException("PACKAGER_LOAD_FAILED: " + e.getMessage());
         }
 
-        // ── Phase 10: Return response immediately ──────────────────────────
-        return ValidationResponse.builder()
-                .runReference(runReference)
-                .status(errors.isEmpty() ? "VALID" : "INVALID")
+        // ── Phase 3: Parse with jPOS ──────────────────────────────────────────
+        long parseStart = System.currentTimeMillis();
+        ParsedMessage parsed;
+        try {
+            parsed = IsoParserUtil.parse(request.getRawMessage(), packager);
+        } catch (Exception e) {
+            long parseDurationMs = System.currentTimeMillis() - parseStart;
+            log.error("[{}] PARSE_ERROR: {}", correlationId, e.getMessage());
+
+            // Generate runRef and publish PARSE_ERROR event — then return 200
+            String runRef = runReferenceService.generate();
+            TimingDTO timing = TimingDTO.builder()
+                    .parseDurationMs(parseDurationMs)
+                    .validationDurationMs(0L)
+                    .totalDurationMs(System.currentTimeMillis() - totalStart)
+                    .build();
+
+            ValidationRunEvent errorEvent = ValidationRunEvent.builder()
+                    .runReference(runRef)
+                    .status("PARSE_ERROR")
+                    .profileId(request.getProfileId())
+                    .mti("UNKNOWN")
+                    .rawMessage(request.getRawMessage())
+                    .userId(userId != null ? userId : "anonymous")
+                    .correlationId(correlationId != null ? correlationId : "")
+                    .parsedFields(Collections.emptyList())
+                    .errors(Collections.emptyList())
+                    .timing(timing)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            publisher.publish(errorEvent);
+
+            return ValidationResponse.builder()
+                    .runReference(runRef)
+                    .status("PARSE_ERROR")
+                    .profileId(request.getProfileId())
+                    .mti("UNKNOWN")
+                    .message("jPOS: " + e.getMessage())
+                    .parsedFields(Collections.emptyList())
+                    .errors(Collections.emptyList())
+                    .timing(timing)
+                    .ai(AiResultDTO.builder().skipped(true).skipReason("PARSE_ERROR").build())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+        }
+
+        long parseDurationMs = System.currentTimeMillis() - parseStart;
+        String mti            = parsed.getMti();
+        Map<Integer, String> rawFields    = parsed.getFields();
+        Map<Integer, String> maskedFields = PanMaskingUtil.maskFields(rawFields);
+
+        log.debug("[{}] Parsed MTI={} fieldCount={}", correlationId, mti, rawFields.size());
+
+        // Compute bitmap from parsedFields
+        BitmapDTO bitmap = computeBitmap(rawFields);
+
+        // ── Phase 4: Fetch rules (Feign, Caffeine 30s cache) ─────────────────
+        List<EffectiveRuleDto> rules;
+        try {
+            rules = cacheService.getRules(request.getProfileId(), mti);
+        } catch (Exception e) {
+            log.warn("[{}] Rules service unavailable — proceeding with empty rules: {}",
+                    correlationId, e.getMessage());
+            rules = Collections.emptyList();
+        }
+
+        // Build DE-number → fieldName map for response construction
+        Map<Integer, String> deFieldNames = new HashMap<>();
+        for (EffectiveRuleDto rule : rules) {
+            int de = RulesEngine.parseDeNumber(rule.getDeNumber());
+            if (de > 0 && rule.getFieldName() != null) {
+                deFieldNames.put(de, rule.getFieldName());
+            }
+        }
+
+        // ── Phase 5: Rules Engine (pure in-memory) ────────────────────────────
+        long validateStart = System.currentTimeMillis();
+        List<ValidationErrorDTO> errors = RulesEngine.evaluate(rawFields, rules);
+        long validationDurationMs = System.currentTimeMillis() - validateStart;
+
+        log.debug("[{}] RulesEngine: {} error(s)", correlationId, errors.size());
+
+        // Determine status
+        String status = determineStatus(errors);
+
+        // ── Phase 6: AI Explanation ───────────────────────────────────────────
+        AiResultDTO aiResult;
+        if (!request.isEnableAi()) {
+            aiResult = AiResultDTO.builder().skipped(true).skipReason("AI_DISABLED").build();
+        } else if (errors.isEmpty()) {
+            aiResult = AiResultDTO.builder().skipped(true).skipReason("NO_ERRORS").build();
+        } else {
+            aiResult = callAiExplain(null /* runRef not yet generated */,
+                    request.getProfileId(), mti, errors, maskedFields, correlationId);
+        }
+
+        // ── Phase 7: Generate run reference + publish async ──────────────────
+        String runRef = runReferenceService.generate();
+
+        long totalDurationMs = System.currentTimeMillis() - totalStart;
+        TimingDTO timing = TimingDTO.builder()
+                .parseDurationMs(parseDurationMs)
+                .validationDurationMs(validationDurationMs)
+                .totalDurationMs(totalDurationMs)
+                .build();
+
+        List<ParsedFieldDTO> parsedFieldDTOs =
+                buildParsedFieldDTOs(maskedFields, rawFields, deFieldNames);
+
+        ValidationRunEvent event = ValidationRunEvent.builder()
+                .runReference(runRef)
+                .status(status)
                 .profileId(request.getProfileId())
                 .mti(mti)
-                .parsedFields(PanMaskingUtil.maskFields(parsedFields))   // PAN never raw
+                .rawMessage(request.getRawMessage())  // raw — never log, only stored
+                .userId(userId != null ? userId : "anonymous")
+                .correlationId(correlationId != null ? correlationId : "")
+                .parsedFields(parsedFieldDTOs)
                 .errors(errors)
-                .aiExplanation(aiExplanation)    // null when AI disabled/skipped/unreachable
+                .timing(timing)
+                .aiResult(aiResult)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        publisher.publish(event); // fire-and-forget
+
+        // ── Phase 8: Return response immediately ──────────────────────────────
+        return ValidationResponse.builder()
+                .runReference(runRef)
+                .status(status)
+                .profileId(request.getProfileId())
+                .mti(mti)
+                .parsedFields(parsedFieldDTOs)
+                .errors(errors)
+                .timing(timing)
+                .bitmap(bitmap)
+                .ai(aiResult)
+                .timestamp(LocalDateTime.now())
                 .build();
     }
 
-    // ── AI call — wrapped so it NEVER propagates exceptions ──────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    //  POST /api/v1/validate/build
+    // ─────────────────────────────────────────────────────────────────────────
 
-    private String callAiExplain(Long profileId,
-                                 String mti,
-                                 List<String> errorStrings,
-                                 Map<Integer, String> maskedFields,
-                                 String correlationId) {
+    @Override
+    public BuildMessageResponse buildMessage(BuildMessageRequest request, String userId) {
+
+        // Fetch profile format to get packager
+        ProfileFormatResponseDto profileFormat = cacheService.getProfileFormat(request.getProfileId());
+        if (profileFormat == null || profileFormat.getXmlContent() == null) {
+            throw new RuntimeException(
+                    "PROFILE_NOT_FOUND: No active format for profileId=" + request.getProfileId());
+        }
+
+        ISOPackager packager = packagerCache.get(profileFormat.getFormatId(),
+                profileFormat.getXmlContent());
+
+        // Fetch field definitions and filter builder-visible ones
+        List<FieldDefinitionDto> fieldDefs;
         try {
-            List<AiExplainRequestDto.AiErrorDto> errorDtos = mapErrorStrings(errorStrings);
+            fieldDefs = rulesClient.getFieldDefinitions(request.getProfileId(), request.getMti());
+        } catch (Exception e) {
+            throw new RuntimeException("FIELD_DEFINITIONS_UNAVAILABLE: " + e.getMessage());
+        }
+
+        Map<String, FieldDefinitionDto> defByDeNum = new HashMap<>();
+        for (FieldDefinitionDto fd : fieldDefs) {
+            if (Boolean.TRUE.equals(fd.getIsBuilderVisible())) {
+                defByDeNum.put(normaliseDeNumber(fd.getDeNumber()), fd);
+            }
+        }
+
+        List<String> warnings = new ArrayList<>();
+        Map<Integer, String> validatedFields = new HashMap<>();
+
+        if (request.getFields() != null) {
+            for (Map.Entry<Integer, String> entry : request.getFields().entrySet()) {
+                int    de    = entry.getKey();
+                String value = entry.getValue();
+                String deKey = String.valueOf(de);
+                FieldDefinitionDto fd = defByDeNum.get(deKey);
+
+                if (fd != null && fd.getMaxLength() != null
+                        && value != null && value.length() > fd.getMaxLength()) {
+                    warnings.add("DE" + de + " value length " + value.length()
+                            + " exceeds maxLength " + fd.getMaxLength()
+                            + " — truncated");
+                    value = value.substring(0, fd.getMaxLength());
+                }
+                validatedFields.put(de, value);
+            }
+        }
+
+        try {
+            ISOMsg msg = IsoParserUtil.buildMsg(request.getMti(), validatedFields, packager);
+            byte[] packed = msg.pack();
+            String hex    = bytesToHex(packed);
+
+            return BuildMessageResponse.builder()
+                    .hexMessage(hex)
+                    .mti(request.getMti())
+                    .profileId(request.getProfileId())
+                    .validationWarnings(warnings)
+                    .build();
+
+        } catch (Exception e) {
+            throw new RuntimeException("BUILD_FAILED: " + e.getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Private helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private String determineStatus(List<ValidationErrorDTO> errors) {
+        if (errors.isEmpty()) return "PASSED";
+        boolean hasCritical = errors.stream()
+                .anyMatch(e -> "CRITICAL".equalsIgnoreCase(e.getSeverity()));
+        return hasCritical ? "FAILED" : "WARNED";
+    }
+
+    private AiResultDTO callAiExplain(String runRef, Long profileId, String mti,
+                                      List<ValidationErrorDTO> errors,
+                                      Map<Integer, String> maskedFields,
+                                      String correlationId) {
+        long start = System.currentTimeMillis();
+        try {
+            List<AiExplainRequestDto.AiErrorDto> aiErrors = errors.stream()
+                    .map(e -> AiExplainRequestDto.AiErrorDto.builder()
+                            .deNumber(e.getDeNumber())
+                            .fieldName(e.getFieldName())
+                            .severity(e.getSeverity())
+                            .errorCode(e.getErrorCode())
+                            .errorMessage(e.getMessage())
+                            .build())
+                    .collect(Collectors.toList());
 
             AiExplainRequestDto req = AiExplainRequestDto.builder()
+                    .runReference(runRef)
                     .profileId(profileId)
                     .mti(mti)
-                    .errors(errorDtos)
+                    .errors(aiErrors)
                     .parsedFields(maskedFields)
                     .correlationId(correlationId)
                     .build();
 
-            com.verinite.common.dto.ApiResponse<String> response = aiServiceClient.explain(req);
-            return (response != null) ? response.getData() : null;
+            com.verinite.common.dto.ApiResponse<String> resp = aiServiceClient.explain(req);
+            long durationMs = System.currentTimeMillis() - start;
 
+            if (resp != null && resp.getData() != null) {
+                return AiResultDTO.builder()
+                        .explanation(resp.getData())
+                        .durationMs(durationMs)
+                        .skipped(false)
+                        .build();
+            } else {
+                return AiResultDTO.builder()
+                        .durationMs(durationMs)
+                        .skipped(true)
+                        .skipReason("AI_UNAVAILABLE")
+                        .build();
+            }
         } catch (Exception e) {
-            log.warn("[AI] explain call failed for mti={}: {}", mti, e.getMessage());
-            return null;
+            log.warn("[AI] explain failed for profileId={} mti={}: {}", profileId, mti, e.getMessage());
+            return AiResultDTO.builder()
+                    .durationMs(System.currentTimeMillis() - start)
+                    .skipped(true)
+                    .skipReason("AI_UNAVAILABLE")
+                    .build();
         }
     }
 
-    private List<AiExplainRequestDto.AiErrorDto> mapErrorStrings(List<String> errorStrings) {
-        return errorStrings.stream()
-                .map(err -> {
-                    String deNumber = "UNKNOWN";
-                    if (err != null && err.startsWith("DE")) {
-                        int spaceIdx = err.indexOf(' ');
-                        if (spaceIdx > 0) deNumber = err.substring(0, spaceIdx);
-                    }
-                    return AiExplainRequestDto.AiErrorDto.builder()
-                            .deNumber(deNumber)
-                            .severity("CRITICAL")
-                            .errorMessage(err)
+    private List<ParsedFieldDTO> buildParsedFieldDTOs(Map<Integer, String> maskedFields,
+                                                      Map<Integer, String> rawFields,
+                                                      Map<Integer, String> deFieldNames) {
+        return maskedFields.entrySet().stream()
+                .filter(e -> e.getKey() > 0) // exclude MTI (key=0)
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> {
+                    int de = e.getKey();
+                    return ParsedFieldDTO.builder()
+                            .deNumber(de)
+                            .fieldName(deFieldNames.getOrDefault(de, "DE" + de))
+                            .value(e.getValue())
+                            .masked(de == 2 && !Objects.equals(e.getValue(), rawFields.get(de)))
                             .build();
                 })
                 .collect(Collectors.toList());
     }
 
-    // ── Redis run_reference generator ───────────────────────────────────────
+    private BitmapDTO computeBitmap(Map<Integer, String> fields) {
+        boolean hasSecondary = fields.keySet().stream()
+                .anyMatch(k -> k >= 65 && k <= 128);
 
-    private String generateRunReference() {
-        String today    = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String redisKey = "run_ref:" + today;
-        Long   seq      = redisTemplate.opsForValue().increment(redisKey);
-        if (seq != null && seq == 1) {
-            redisTemplate.expire(redisKey, java.time.Duration.ofDays(2));
+        long primaryBits = 0L;
+        if (hasSecondary) primaryBits |= (1L << 63); // bit 1 signals secondary bitmap present
+        for (int de = 2; de <= 64; de++) {
+            if (fields.containsKey(de)) {
+                primaryBits |= (1L << (64 - de));
+            }
         }
-        return String.format("VLD-%s-%05d", today, seq != null ? seq : 1);
+
+        String primary = String.format("%016X", primaryBits);
+
+        String secondary = null;
+        if (hasSecondary) {
+            long secondaryBits = 0L;
+            for (int de = 65; de <= 128; de++) {
+                if (fields.containsKey(de)) {
+                    secondaryBits |= (1L << (128 - de));
+                }
+            }
+            secondary = String.format("%016X", secondaryBits);
+        }
+
+        return BitmapDTO.builder().primary(primary).secondary(secondary).build();
     }
 
-    // ── Rule type/value resolver helpers ────────────────────────────────────
-
-    private String resolveRuleType(Map<String, Object> rule) {
-        if (Boolean.TRUE.equals(rule.get("isMandatory"))) return "MANDATORY";
-        if (rule.get("patternRegex")  != null)            return "REGEX";
-        if (rule.get("allowedValues") != null)            return "ALLOWED_VALUES";
-        if (rule.get("maxLength")     != null)            return "MAX_LENGTH";
-        if (rule.get("minLength")     != null)            return "MIN_LENGTH";
-        return "MANDATORY";
+    private String normaliseDeNumber(String deNumber) {
+        if (deNumber == null) return "";
+        return deNumber.toUpperCase().replace("DE", "").trim();
     }
 
-    private String resolveRuleValue(Map<String, Object> rule) {
-        if (rule.get("patternRegex")  != null) return String.valueOf(rule.get("patternRegex"));
-        if (rule.get("allowedValues") != null) return String.valueOf(rule.get("allowedValues"));
-        if (rule.get("maxLength")     != null) return String.valueOf(rule.get("maxLength"));
-        if (rule.get("minLength")     != null) return String.valueOf(rule.get("minLength"));
-        return "";
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02X", b));
+        }
+        return sb.toString();
     }
 }

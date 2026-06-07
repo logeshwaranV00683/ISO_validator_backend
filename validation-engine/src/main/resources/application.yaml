@@ -1,31 +1,24 @@
 spring:
   application:
     name: validation-engine
-  datasource:
-    url: jdbc:mysql://localhost:3306/iso_validator_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: root
-    password: root
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    open-in-view: false
+
+  # No JPA/MySQL — validation-engine is stateless; history is persisted via MQ → history-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
   rabbitmq:
     host: localhost
     port: 5672
     username: guest
     password: guest
+
   data:
     redis:
       host: localhost
       port: 6379
-  cache:
-    type: caffeine
-    caffeine:
-      spec: maximumSize=500,expireAfterWrite=30s
-    cache-names:
-      - profileFormats
-      - rulesCache
+
   cloud:
     config:
       enabled: false
@@ -40,41 +33,44 @@ eureka:
     fetch-registry: true
     register-with-eureka: true
 
-# ── Feign configuration ──────────────────────────────────────────────────────
+# ── Feign ─────────────────────────────────────────────────────────────────────
 feign:
   circuitbreaker:
-    enabled: true       # enables Feign + Resilience4j integration (uses fallback class)
+    enabled: true
   client:
     config:
       ai-service:
         connectTimeout: 3000
-        readTimeout: 22000   # AI takes up to 20s; give 2s headroom
+        readTimeout: 22000
+      profile-service:
+        connectTimeout: 3000
+        readTimeout: 5000
+      rules-service:
+        connectTimeout: 3000
+        readTimeout: 5000
 
-# ── Resilience4j — Circuit Breakers ─────────────────────────────────────────
+# ── Resilience4j ──────────────────────────────────────────────────────────────
 resilience4j:
   circuitbreaker:
     instances:
-      # Profile service CB
       profile-cb:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      # Rules service CB
       rules-cb:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      # AI service CB — CB open → AIServiceClientFallback returns null
-      ai-service:
+      ai-cb:
         slidingWindowSize: 5
         failureRateThreshold: 60
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 2
   timelimiter:
     instances:
-      ai-service:
+      ai-cb:
         timeoutDuration: 22s
       profile-cb:
         timeoutDuration: 5s
@@ -84,3 +80,4 @@ resilience4j:
 logging:
   level:
     com.verinite.validation: DEBUG
+    org.jpos: WARN
