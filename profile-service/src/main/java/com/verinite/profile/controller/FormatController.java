@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,11 +22,12 @@ public class FormatController {
     private final FormatService formatService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<FormatDto>> createFormat(
-            @RequestBody @Valid CreateFormatRequest req) {
-        FormatDto created = formatService.create(req);
+            @RequestBody @Valid CreateFormatRequest req,
+            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(created, "Format created"));
+                .body(ApiResponse.success(formatService.create(req, username), "Format created"));
     }
 
     @GetMapping
@@ -38,35 +40,56 @@ public class FormatController {
         return ResponseEntity.ok(ApiResponse.success(formatService.getById(id), "Format found"));
     }
 
-    /**
-     * PUT /formats/{id}
-     * Save current XML as a version, replace with new XML, bump currentVersion.
-     * Publishes FORMAT_UPDATED to cache.invalidation exchange.
-     */
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<FormatDto>> updateFormat(
             @PathVariable Long id,
             @RequestBody @Valid UpdateFormatRequest req,
             @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
-        FormatDto updated = formatService.update(id, req.getXmlContent(), username);
-        return ResponseEntity.ok(ApiResponse.success(updated, "Format updated — version bumped"));
+        return ResponseEntity.ok(ApiResponse.success(
+                formatService.update(id, req.getXmlContent(), username), "Format updated"));
     }
 
-    /**
-     * PUT /formats/{id}/rollback
-     * Restore previous version content.
-     * Publishes FORMAT_ROLLED_BACK to cache.invalidation exchange.
-     */
+    /** DELETE /formats/{id} — soft delete */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteFormat(@PathVariable Long id) {
+        formatService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Format deleted"));
+    }
+
+    /** PATCH /formats/{id}/status?active=true|false */
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> setStatus(
+            @PathVariable Long id, @RequestParam boolean active) {
+        formatService.setActive(id, active);
+        return ResponseEntity.ok(ApiResponse.success(null,
+                active ? "Format activated" : "Format deactivated"));
+    }
+
+    /** POST /formats/validate-xml — dry-run jPOS validation, no DB write */
+    @PostMapping("/validate-xml")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> validateXml(@RequestBody String xmlContent) {
+        formatService.validateXml(xmlContent);
+        return ResponseEntity.ok(ApiResponse.success("XML is valid", "Validation passed"));
+    }
+
+    /** POST /formats/{id}/reload — force cache reload signal */
+    @PostMapping("/{id}/reload")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> reload(@PathVariable Long id) {
+        formatService.reload(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Reload signal sent"));
+    }
+
     @PutMapping("/{id}/rollback")
-    public ResponseEntity<ApiResponse<FormatDto>> rollbackFormat(@PathVariable Long id) {
-        FormatDto rolled = formatService.rollback(id);
-        return ResponseEntity.ok(ApiResponse.success(rolled, "Format rolled back"));
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<FormatDto>> rollback(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(formatService.rollback(id), "Format rolled back"));
     }
 
-    /**
-     * GET /formats/{id}/versions
-     * Full version history.
-     */
     @GetMapping("/{id}/versions")
     public ResponseEntity<ApiResponse<List<FormatDto>>> getVersions(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(formatService.getVersions(id), "Versions fetched"));

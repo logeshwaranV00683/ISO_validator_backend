@@ -63,7 +63,14 @@ public class MessageFormat {
     @Column(name = "updated_by")
     private String updatedBy;
 
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
     public enum Encoding {
         ASCII, EBCDIC, Binary
+    }
+
+    public enum Status{
+        active, inactive
     }
 }

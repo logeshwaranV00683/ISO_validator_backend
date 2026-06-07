@@ -2,6 +2,7 @@ package com.verinite.validation.service.impl;
 
 import com.verinite.common.util.PanMaskingUtil;
 import com.verinite.validation.client.AIServiceClient;
+import com.verinite.validation.client.HistoryServiceClient;
 import com.verinite.validation.client.RulesClient;
 import com.verinite.validation.dto.*;
 import com.verinite.validation.engine.RulesEngine;
@@ -33,6 +34,7 @@ public class ValidationServiceImpl implements ValidationService {
     private final ValidationRunPublisher publisher;
     private final RunReferenceService    runReferenceService;
     private final RulesClient           rulesClient;
+    private final HistoryServiceClient historyClient;
 
     // ─────────────────────────────────────────────────────────────────────────
     //  POST /api/v1/validate  — full 8-phase pipeline
@@ -280,6 +282,45 @@ public class ValidationServiceImpl implements ValidationService {
         } catch (Exception e) {
             throw new RuntimeException("BUILD_FAILED: " + e.getMessage());
         }
+    }
+
+    @Override
+    public ValidationResponse rerun(String runReference, String userId, String correlationId) {
+        // 1. Fetch original run from history-service
+        Object raw = historyClient.getRunDetail(runReference);
+
+        // 2. Extract profileId and rawMessage from the history response
+        // The history response is a Map — parse it safely
+        if (!(raw instanceof java.util.Map<?, ?> map)) {
+            throw new RuntimeException("Could not fetch original run: " + runReference);
+        }
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> data = (java.util.Map<String, Object>) map;
+
+        // ApiResponse wraps in "data" field
+        Object innerData = data.get("data");
+        if (innerData instanceof java.util.Map<?, ?> inner) {
+            data = (java.util.Map<String, Object>) inner;
+        }
+
+        Object profileIdObj   = data.get("profileId");
+        Object rawMessageObj  = data.get("rawMessage");
+        Object aiEnabledObj   = data.get("aiEnabled");
+
+        if (profileIdObj == null || rawMessageObj == null) {
+            throw new RuntimeException("Original run data incomplete for rerun: " + runReference);
+        }
+
+        ValidationRequest rerunRequest = ValidationRequest.builder()
+                .profileId(Long.valueOf(profileIdObj.toString()))
+                .rawMessage(rawMessageObj.toString())
+                .enableAi(Boolean.TRUE.equals(aiEnabledObj))
+                .isRerun(true)
+                .originalRunReference(runReference)
+                .build();
+
+        return validate(rerunRequest, userId, correlationId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

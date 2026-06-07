@@ -179,4 +179,34 @@ public class HistoryService {
                         .build()).toList())
                 .build();
     }
+
+    public String exportRuns(Long profileId, String mti, String status, String format) {
+        Specification<ValidationRun> spec = ValidationRunSpec.filter(
+                profileId, null, status, mti, null, null);
+        List<ValidationRun> runs = runRepository.findAll(spec);
+
+        if ("csv".equalsIgnoreCase(format)) {
+            StringBuilder csv = new StringBuilder();
+            csv.append("runReference,profileId,mti,status,totalErrors,createdAt\n");
+            runs.forEach(r -> csv
+                    .append(r.getRunReference()).append(",")
+                    .append(r.getProfileId()).append(",")
+                    .append(r.getMti()).append(",")
+                    .append(r.getStatus()).append(",")
+                    .append(r.getTotalErrors()).append(",")
+                    .append(r.getCreatedAt()).append("\n"));
+            return csv.toString();
+        }
+
+        // Default: JSON array
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper =
+                    new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            List<HistorySummaryDTO> dtos = runs.stream().map(this::toSummary).toList();
+            return mapper.writeValueAsString(dtos);
+        } catch (Exception e) {
+            throw new RuntimeException("Export failed: " + e.getMessage(), e);
+        }
+    }
 }

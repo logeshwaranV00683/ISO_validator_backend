@@ -192,6 +192,45 @@ public class AuthServiceImpl implements AuthService {
         log.info("Logout success: jti={}", jti);
     }
 
+    @Override
+    @Transactional
+    public LoginResponse refreshToken(User user, String ipAddress, String userAgent) {
+        String jti = UUID.randomUUID().toString();
+        Date issuedAt  = new Date();
+        Date expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
+
+        String token = Jwts.builder()
+                .subject(String.valueOf(user.getId()))
+                .claim("username", user.getUsername())
+                .claim("role", user.getRole().name())
+                .id(jti)
+                .issuedAt(issuedAt)
+                .expiration(expiresAt)
+                .signWith(jwtPrivateKey)
+                .compact();
+
+        UserSession session = UserSession.builder()
+                .user(user)
+                .jti(jti)
+                .jwtTokenHash(sha256(token))
+                .issuedAt(issuedAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
+                .expiresAt(expiresAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .build();
+
+        sessionRepository.save(session);
+        log.info("Token refreshed: user={} newJti={}", user.getUsername(), jti);
+
+        return LoginResponse.builder()
+                .token(token)
+                .username(user.getUsername())
+                .role(user.getRole().name())
+                .avatarInitials(user.getAvatarInitials())
+                .expiresAt(expiresAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
+                .build();
+    }
+
     private String sha256(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

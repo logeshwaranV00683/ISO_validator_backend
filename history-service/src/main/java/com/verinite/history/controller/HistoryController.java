@@ -83,4 +83,27 @@ public class HistoryController {
     public ResponseEntity<ApiResponse<StatsResponse>> getStats() {
         return ResponseEntity.ok(ApiResponse.success(statsService.getStats(), "Stats fetched"));
     }
+
+    /**
+     * GET /history/export?format=json|csv
+     * Downloads all (non-deleted) runs matching the same filters as /runs.
+     */
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) Long   profileId,
+            @RequestParam(required = false) String mti,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "json") String format) {
+
+        String data = historyService.exportRuns(profileId, mti, status, format);
+        String mediaType = "csv".equalsIgnoreCase(format)
+                ? "text/csv"
+                : "application/json";
+        String filename = "validation-runs." + format.toLowerCase();
+
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Type", mediaType)
+                .body(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
 }

@@ -10,4 +10,7 @@ public interface ValidationService {
     ValidationResponse validate(ValidationRequest request, String userId, String correlationId);
 
     BuildMessageResponse buildMessage(BuildMessageRequest request, String userId);
+
+    /** Re-validate the raw message from a previous run using current rules. */
+    ValidationResponse rerun(String runReference, String userId, String correlationId);
 }

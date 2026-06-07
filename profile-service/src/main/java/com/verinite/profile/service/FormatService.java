@@ -3,7 +3,6 @@ package com.verinite.profile.service;
 import com.verinite.profile.dto.CreateFormatRequest;
 import com.verinite.profile.dto.FormatDto;
 import com.verinite.profile.dto.ProfileFormatResponse;
-import com.verinite.profile.dto.UpdateFormatRequest;
 import com.verinite.profile.entity.MessageFormat;
 import com.verinite.profile.entity.MessageFormatVersion;
 import com.verinite.profile.event.FormatEventPublisher;
@@ -25,12 +24,13 @@ public class FormatService {
     private final MessageFormatVersionRepository formatVersionRepo;
     private final FormatEventPublisher formatEventPublisher;
 
-    public FormatDto create(CreateFormatRequest req) {
+    public FormatDto create(CreateFormatRequest req, String username) {
         MessageFormat format = MessageFormat.builder()
                 .profileId(req.getProfileId())
                 .formatName(req.getFormatName())
                 .mti(req.getMti())
                 .xmlContent(req.getXmlContent())
+                .createdBy(username)
                 .build();
         MessageFormat saved = formatRepo.save(format);
         log.info("Created format id={} profileId={}", saved.getId(), saved.getProfileId());
@@ -133,5 +133,40 @@ public class FormatService {
                 .createdAt(f.getCreatedAt())
                 .updatedAt(f.getUpdatedAt())
                 .build();
+    }
+
+    public void delete(Long id) {
+        MessageFormat format = formatRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Format not found: " + id));
+        format.setDeletedAt(java.time.LocalDateTime.now());
+        formatRepo.save(format);
+        log.info("Soft-deleted format id={}", id);
+    }
+
+    public void setActive(Long id, boolean active) {
+        MessageFormat format = formatRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Format not found: " + id));
+        format.setStatus(MessageFormat.Status.active);
+        formatRepo.save(format);
+    }
+
+    public void validateXml(String xmlContent) {
+        try {
+            org.jpos.iso.packager.GenericPackager packager =
+                    new org.jpos.iso.packager.GenericPackager(
+                            new java.io.ByteArrayInputStream(
+                                    xmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            log.info("XML validation passed — packager loaded");
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid jPOS XML: " + e.getMessage(), e);
+        }
+    }
+
+    public void reload(Long id) {
+        MessageFormat format = formatRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Format not found: " + id));
+        // Publish FORMAT_UPDATED — validation-engine will evict packager cache and reload
+        formatEventPublisher.publishFormatUpdated(null, id);
+        log.info("Reload signal published for formatId={}", id);
     }
 }
