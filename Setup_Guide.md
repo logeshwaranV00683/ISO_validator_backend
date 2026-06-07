@@ -50,3 +50,27 @@ docker exec iso-validator-redis redis-cli ping
 # Open browser → http://localhost:15672
 # Login: guest / guest
 ```
+
+# 5. Ollama:
+
+Ollama accepts connections from other containers and services on the Docker network
+
+Pull a model:
+
+The container starts empty. You must download a model:
+
+```
+docker exec -it ollama ollama pull mistral
+
+or
+
+docker exec -it ollama ollama pull llama3.2
+
+```
+
+The model files are stored in your ollama_data volume, so they persist across restarts.
+
+Verify:
+
+curl http://localhost:11434/api/tags   You should see your downloaded models.
+

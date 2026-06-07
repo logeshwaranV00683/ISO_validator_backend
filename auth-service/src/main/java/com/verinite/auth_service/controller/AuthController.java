@@ -142,7 +142,7 @@ public class AuthController {
     }
 
     /** GET /internal/auth/validate-token — called by gateway for revocation check */
-    @GetMapping("/internal/validate-token")
+    @GetMapping("/internal/auth/validate-token")
     public ResponseEntity<ApiResponse<Boolean>> validateToken(@RequestParam String jti) {
         return ResponseEntity.ok(ApiResponse.success(authService.validateToken(jti), "OK"));
     }

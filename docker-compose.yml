@@ -78,6 +78,17 @@ services:
       retries: 10
       start_period: 30s
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    restart: unless-stopped
+
 # ─────────────────────────────────────────────
 # Named volumes — persist data across restarts
 # ─────────────────────────────────────────────
@@ -86,3 +97,5 @@ volumes:
     name: iso_validator_redis_data
   rabbitmq_data:
     name: iso_validator_rabbitmq_data
+  ollama_data:
+    name: iso_validator_ollama_data
