@@ -1,4 +1,4 @@
-package com.verinite.history_service.dto.response;
+package com.verinite.history.dto.response;   // FIX: was com.verinite.history_service.dto.response
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class ValidationRunDto {
 
     private String runReference;

@@ -1,6 +1,7 @@
 package com.verinite.auth_service.service.impl;
 
 import com.verinite.auth_service.dto.CreateUserRequest;
+import com.verinite.auth_service.dto.UpdateUserRequest;
 import com.verinite.auth_service.dto.UserDto;
 import com.verinite.auth_service.entity.User;
 import com.verinite.auth_service.exception.ResourceNotFoundException;
@@ -8,6 +9,9 @@ import com.verinite.auth_service.repository.UserRepository;
 import com.verinite.auth_service.service.UserService;
 import com.verinite.common.enums.Role;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +38,7 @@ public class UserServiceImpl implements UserService {
                 .username(request.getUsername())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
+                .email(request.getEmail() != null ? request.getEmail() : null)
                 .avatarInitials(initials(request.getFullName()))
                 .role(request.getRole())
                 .build();
@@ -41,7 +46,18 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserDto> getAllUsers() {
+    public Page<UserDto> getAllUsers(Pageable pageable) {
+        List<UserDto> all = userRepository.findByDeletedAtIsNull()
+                .stream().map(this::mapToDto).toList();
+
+        int start = (int) pageable.getOffset();
+        int end   = Math.min(start + pageable.getPageSize(), all.size());
+        List<UserDto> slice = (start >= all.size()) ? List.of() : all.subList(start, end);
+        return new PageImpl<>(slice, pageable, all.size());
+    }
+
+    @Override
+    public List<UserDto> getAllUsersUnpaged() {
         return userRepository.findByDeletedAtIsNull().stream()
                 .map(this::mapToDto).toList();
     }
@@ -51,12 +67,14 @@ public class UserServiceImpl implements UserService {
         return mapToDto(findActive(id));
     }
 
+    // BUG 2 FIX: accepts UpdateUserRequest — never touches password
     @Override
     @Transactional
-    public UserDto updateUser(Long id, CreateUserRequest request) {
+    public UserDto updateUser(Long id, UpdateUserRequest request) {
         User user = findActive(id);
         user.setFullName(request.getFullName());
         user.setAvatarInitials(initials(request.getFullName()));
+        user.setEmail(request.getEmail());
         user.setRole(request.getRole());
         return mapToDto(userRepository.save(user));
     }
@@ -84,7 +102,7 @@ public class UserServiceImpl implements UserService {
         try {
             user.setRole(Role.valueOf(role.toUpperCase()));
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid role: " + role + ". Valid values: ADMIN, ANALYST, VIEWER");
+            throw new RuntimeException("Invalid role: " + role + ". Valid: ADMIN, ANALYST, VIEWER");
         }
         return mapToDto(userRepository.save(user));
     }
@@ -105,7 +123,7 @@ public class UserServiceImpl implements UserService {
     private User findActive(Long id) {
         return userRepository.findById(id)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
     }
 
     private String initials(String fullName) {

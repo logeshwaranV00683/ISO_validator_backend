@@ -78,6 +78,12 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+
         <!-- ✅ REMOVED: jakarta.servlet-api — Gateway is reactive (WebFlux/Netty).
              Servlet API has no place here and will cause startup crash.        -->
 

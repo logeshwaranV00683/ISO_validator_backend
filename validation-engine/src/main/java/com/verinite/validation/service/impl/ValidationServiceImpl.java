@@ -34,10 +34,10 @@ public class ValidationServiceImpl implements ValidationService {
     private final ValidationRunPublisher publisher;
     private final RunReferenceService    runReferenceService;
     private final RulesClient           rulesClient;
-    private final HistoryServiceClient historyClient;
+    private final HistoryServiceClient  historyClient;
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  POST /api/v1/validate  — full 8-phase pipeline
+    //  POST /validate — full 8-phase pipeline
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -49,7 +49,7 @@ public class ValidationServiceImpl implements ValidationService {
         log.debug("[{}] validate: profileId={} enableAi={}", correlationId,
                 request.getProfileId(), request.isEnableAi());
 
-        // ── Phase 1: Fetch profile + format (Feign, Caffeine 30s cache) ──────
+        // ── Phase 1: Fetch profile + format ──────────────────────────────────
         ProfileFormatResponseDto profileFormat;
         try {
             profileFormat = cacheService.getProfileFormat(request.getProfileId());
@@ -63,7 +63,7 @@ public class ValidationServiceImpl implements ValidationService {
                     "PROFILE_NOT_FOUND: No active format for profileId=" + request.getProfileId());
         }
 
-        // ── Phase 2: Load / cache packager (PackagerCache, no TTL) ───────────
+        // ── Phase 2: Load / cache packager ────────────────────────────────────
         ISOPackager packager;
         try {
             packager = packagerCache.get(profileFormat.getFormatId(), profileFormat.getXmlContent());
@@ -82,13 +82,8 @@ public class ValidationServiceImpl implements ValidationService {
             long parseDurationMs = System.currentTimeMillis() - parseStart;
             log.error("[{}] PARSE_ERROR: {}", correlationId, e.getMessage());
 
-            // Generate runRef and publish PARSE_ERROR event — then return 200
             String runRef = runReferenceService.generate();
-            TimingDTO timing = TimingDTO.builder()
-                    .parseDurationMs(parseDurationMs)
-                    .validationDurationMs(0L)
-                    .totalDurationMs(System.currentTimeMillis() - totalStart)
-                    .build();
+            int totalMs = (int)(System.currentTimeMillis() - totalStart);
 
             ValidationRunEvent errorEvent = ValidationRunEvent.builder()
                     .runReference(runRef)
@@ -98,9 +93,17 @@ public class ValidationServiceImpl implements ValidationService {
                     .rawMessage(request.getRawMessage())
                     .userId(userId != null ? userId : "anonymous")
                     .correlationId(correlationId != null ? correlationId : "")
+                    .parseDurationMs((int) parseDurationMs)
+                    .validationDurationMs(0)
+                    .totalDurationMs(totalMs)
+                    .aiEnabled(request.isEnableAi())
+                    .totalErrors(0)
+                    .criticalCount(0).warningCount(0).infoCount(0)
+                    .totalFieldsPresent(0)
+                    .isRerun(request.isRerun())
+                    .originalRunReference(request.getOriginalRunReference())
                     .parsedFields(Collections.emptyList())
                     .errors(Collections.emptyList())
-                    .timing(timing)
                     .timestamp(LocalDateTime.now())
                     .build();
             publisher.publish(errorEvent);
@@ -113,33 +116,31 @@ public class ValidationServiceImpl implements ValidationService {
                     .message("jPOS: " + e.getMessage())
                     .parsedFields(Collections.emptyList())
                     .errors(Collections.emptyList())
-                    .timing(timing)
+                    .timing(TimingDTO.builder()
+                            .parseDurationMs(parseDurationMs)
+                            .validationDurationMs(0L)
+                            .totalDurationMs(totalMs)
+                            .build())
                     .ai(AiResultDTO.builder().skipped(true).skipReason("PARSE_ERROR").build())
                     .timestamp(LocalDateTime.now())
                     .build();
         }
 
         long parseDurationMs = System.currentTimeMillis() - parseStart;
-        String mti            = parsed.getMti();
+        String mti           = parsed.getMti();
         Map<Integer, String> rawFields    = parsed.getFields();
         Map<Integer, String> maskedFields = PanMaskingUtil.maskFields(rawFields);
-
-        log.debug("[{}] Parsed MTI={} fieldCount={}", correlationId, mti, rawFields.size());
-
-        // Compute bitmap from parsedFields
         BitmapDTO bitmap = computeBitmap(rawFields);
 
-        // ── Phase 4: Fetch rules (Feign, Caffeine 30s cache) ─────────────────
+        // ── Phase 4: Fetch rules ──────────────────────────────────────────────
         List<EffectiveRuleDto> rules;
         try {
             rules = cacheService.getRules(request.getProfileId(), mti);
         } catch (Exception e) {
-            log.warn("[{}] Rules service unavailable — proceeding with empty rules: {}",
-                    correlationId, e.getMessage());
+            log.warn("[{}] Rules service unavailable — empty rules: {}", correlationId, e.getMessage());
             rules = Collections.emptyList();
         }
 
-        // Build DE-number → fieldName map for response construction
         Map<Integer, String> deFieldNames = new HashMap<>();
         for (EffectiveRuleDto rule : rules) {
             int de = RulesEngine.parseDeNumber(rule.getDeNumber());
@@ -148,14 +149,10 @@ public class ValidationServiceImpl implements ValidationService {
             }
         }
 
-        // ── Phase 5: Rules Engine (pure in-memory) ────────────────────────────
+        // ── Phase 5: Rules Engine ─────────────────────────────────────────────
         long validateStart = System.currentTimeMillis();
         List<ValidationErrorDTO> errors = RulesEngine.evaluate(rawFields, rules);
         long validationDurationMs = System.currentTimeMillis() - validateStart;
-
-        log.debug("[{}] RulesEngine: {} error(s)", correlationId, errors.size());
-
-        // Determine status
         String status = determineStatus(errors);
 
         // ── Phase 6: AI Explanation ───────────────────────────────────────────
@@ -165,41 +162,106 @@ public class ValidationServiceImpl implements ValidationService {
         } else if (errors.isEmpty()) {
             aiResult = AiResultDTO.builder().skipped(true).skipReason("NO_ERRORS").build();
         } else {
-            aiResult = callAiExplain(null /* runRef not yet generated */,
-                    request.getProfileId(), mti, errors, maskedFields, correlationId);
+            aiResult = callAiExplain(null, request.getProfileId(), mti,
+                    errors, maskedFields, correlationId);
         }
 
-        // ── Phase 7: Generate run reference + publish async ──────────────────
+        // ── Phase 7: Build event and publish ──────────────────────────────────
         String runRef = runReferenceService.generate();
-
         long totalDurationMs = System.currentTimeMillis() - totalStart;
+
+        List<ParsedFieldDTO> parsedFieldDTOs =
+                buildParsedFieldDTOs(maskedFields, rawFields, deFieldNames);
+
+        // FIX: compute counts and extract key DE values for history
+        long criticalCount = errors.stream()
+                .filter(e -> "CRITICAL".equalsIgnoreCase(e.getSeverity())).count();
+        long warningCount  = errors.stream()
+                .filter(e -> "WARNING".equalsIgnoreCase(e.getSeverity())).count();
+        long infoCount     = errors.stream()
+                .filter(e -> "INFO".equalsIgnoreCase(e.getSeverity())).count();
+
+        String panMasked    = maskedFields.get(2);
+        String responseCode = rawFields.get(39);
+        String currencyCode = rawFields.get(49);
+        String merchantName = rawFields.get(43);
+        String terminalId   = rawFields.get(41);
+        Long   txnAmount    = parseLong(rawFields.get(4));
+
+        ValidationRunEvent event = ValidationRunEvent.builder()
+                .runReference(runRef)
+                .status(status)
+                .profileId(request.getProfileId())
+                .profileNameSnapshot(null)  // profile name not available from format response
+                .formatId(profileFormat.getFormatId())
+                .mti(mti)
+                .rawMessage(request.getRawMessage())
+                .userId(userId != null ? userId : "anonymous")
+                .correlationId(correlationId != null ? correlationId : "")
+                .isRerun(request.isRerun())
+                .originalRunReference(request.getOriginalRunReference())
+                // FIX: bitmap now flat
+                .bitmapPrimary(bitmap.getPrimary())
+                .bitmapExtended(bitmap.getSecondary())
+                // FIX: counts now flat
+                .totalFieldsPresent(rawFields.size())
+                .totalFieldsParsed(parsedFieldDTOs.size())
+                .totalErrors(errors.size())
+                .criticalCount((int) criticalCount)
+                .warningCount((int) warningCount)
+                .infoCount((int) infoCount)
+                // FIX: key DE extracts now flat
+                .panMasked(panMasked)
+                .responseCode(responseCode)
+                .currencyCode(currencyCode)
+                .merchantName(merchantName)
+                .terminalId(terminalId)
+                .transactionAmount(txnAmount)
+                // FIX: timing now flat
+                .parseDurationMs((int) parseDurationMs)
+                .validationDurationMs((int) validationDurationMs)
+                .totalDurationMs((int) totalDurationMs)
+                // FIX: AI now flat
+                .aiEnabled(request.isEnableAi())
+                .aiDurationMs(aiResult.isSkipped() ? null : (int) aiResult.getDurationMs())
+                .aiExplanation(aiResult.getExplanation())
+                .aiModelUsed(aiResult.getModelUsed())
+                // FIX: parsedFields use correct field names for consumer
+                .parsedFields(parsedFieldDTOs.stream()
+                        .map(f -> ValidationRunEvent.ParsedFieldEvent.builder()
+                                .deNumber("DE" + f.getDeNumber())
+                                .fieldName(f.getFieldName())
+                                .rawValue(f.getValue())     // FIX: maps to "rawValue" key
+                                .displayValue(f.getValue())
+                                .isPresent(true)
+                                .fieldLength(f.getValue() != null ? f.getValue().length() : 0)
+                                .dePosition(f.getDeNumber())
+                                .encodingType("FIXED")
+                                .build())
+                        .collect(Collectors.toList()))
+                // FIX: errors use correct field name "errorMessage" not "message"
+                .errors(errors.stream()
+                        .map(e -> ValidationRunEvent.ValidationErrorEvent.builder()
+                                .deNumber(e.getDeNumber())
+                                .fieldName(e.getFieldName())
+                                .severity(e.getSeverity())
+                                .errorCode(e.getErrorCode())
+                                .errorMessage(e.getMessage())  // FIX: "errorMessage" key
+                                .aiExplanation(e.getAiExplanation())
+                                .build())
+                        .collect(Collectors.toList()))
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        publisher.publish(event);  // fire-and-forget
+
+        // ── Phase 8: Return response ──────────────────────────────────────────
         TimingDTO timing = TimingDTO.builder()
                 .parseDurationMs(parseDurationMs)
                 .validationDurationMs(validationDurationMs)
                 .totalDurationMs(totalDurationMs)
                 .build();
 
-        List<ParsedFieldDTO> parsedFieldDTOs =
-                buildParsedFieldDTOs(maskedFields, rawFields, deFieldNames);
-
-        ValidationRunEvent event = ValidationRunEvent.builder()
-                .runReference(runRef)
-                .status(status)
-                .profileId(request.getProfileId())
-                .mti(mti)
-                .rawMessage(request.getRawMessage())  // raw — never log, only stored
-                .userId(userId != null ? userId : "anonymous")
-                .correlationId(correlationId != null ? correlationId : "")
-                .parsedFields(parsedFieldDTOs)
-                .errors(errors)
-                .timing(timing)
-                .aiResult(aiResult)
-                .timestamp(LocalDateTime.now())
-                .build();
-
-        publisher.publish(event); // fire-and-forget
-
-        // ── Phase 8: Return response immediately ──────────────────────────────
         return ValidationResponse.builder()
                 .runReference(runRef)
                 .status(status)
@@ -215,36 +277,34 @@ public class ValidationServiceImpl implements ValidationService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  POST /api/v1/validate/build
+    //  POST /validate/build
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     public BuildMessageResponse buildMessage(BuildMessageRequest request, String userId) {
 
-        // Fetch profile format to get packager
         ProfileFormatResponseDto profileFormat = cacheService.getProfileFormat(request.getProfileId());
         if (profileFormat == null || profileFormat.getXmlContent() == null) {
-            throw new RuntimeException(
-                    "PROFILE_NOT_FOUND: No active format for profileId=" + request.getProfileId());
+            throw new RuntimeException("PROFILE_NOT_FOUND: No active format for profileId="
+                    + request.getProfileId());
         }
 
-        ISOPackager packager = packagerCache.get(profileFormat.getFormatId(),
-                profileFormat.getXmlContent());
+        ISOPackager packager = packagerCache.get(
+                profileFormat.getFormatId(), profileFormat.getXmlContent());
 
-        // Fetch field definitions and filter builder-visible ones
         List<FieldDefinitionDto> fieldDefs;
         try {
             fieldDefs = rulesClient.getFieldDefinitions(request.getProfileId(), request.getMti());
         } catch (Exception e) {
-            throw new RuntimeException("FIELD_DEFINITIONS_UNAVAILABLE: " + e.getMessage());
+            log.warn("Field definitions unavailable — building without validation: {}", e.getMessage());
+            fieldDefs = Collections.emptyList();
         }
 
-        Map<String, FieldDefinitionDto> defByDeNum = new HashMap<>();
-        for (FieldDefinitionDto fd : fieldDefs) {
-            if (Boolean.TRUE.equals(fd.getIsBuilderVisible())) {
-                defByDeNum.put(normaliseDeNumber(fd.getDeNumber()), fd);
-            }
-        }
+        Map<String, FieldDefinitionDto> defByDeNum = fieldDefs.stream()
+                .filter(fd -> fd.getDeNumber() != null)
+                .collect(Collectors.toMap(
+                        fd -> fd.getDeNumber().toUpperCase().replace("DE", ""),
+                        fd -> fd, (a, b) -> a));
 
         List<String> warnings = new ArrayList<>();
         Map<Integer, String> validatedFields = new HashMap<>();
@@ -259,8 +319,7 @@ public class ValidationServiceImpl implements ValidationService {
                 if (fd != null && fd.getMaxLength() != null
                         && value != null && value.length() > fd.getMaxLength()) {
                     warnings.add("DE" + de + " value length " + value.length()
-                            + " exceeds maxLength " + fd.getMaxLength()
-                            + " — truncated");
+                            + " exceeds maxLength " + fd.getMaxLength() + " — truncated");
                     value = value.substring(0, fd.getMaxLength());
                 }
                 validatedFields.put(de, value);
@@ -270,43 +329,41 @@ public class ValidationServiceImpl implements ValidationService {
         try {
             ISOMsg msg = IsoParserUtil.buildMsg(request.getMti(), validatedFields, packager);
             byte[] packed = msg.pack();
-            String hex    = bytesToHex(packed);
-
             return BuildMessageResponse.builder()
-                    .hexMessage(hex)
+                    .hexMessage(bytesToHex(packed))
                     .mti(request.getMti())
                     .profileId(request.getProfileId())
                     .validationWarnings(warnings)
                     .build();
-
         } catch (Exception e) {
             throw new RuntimeException("BUILD_FAILED: " + e.getMessage());
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  POST /validate/{runReference}/rerun
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Override
     public ValidationResponse rerun(String runReference, String userId, String correlationId) {
-        // 1. Fetch original run from history-service
         Object raw = historyClient.getRunDetail(runReference);
 
-        // 2. Extract profileId and rawMessage from the history response
-        // The history response is a Map — parse it safely
-        if (!(raw instanceof java.util.Map<?, ?> map)) {
+        if (!(raw instanceof Map<?, ?> map)) {
             throw new RuntimeException("Could not fetch original run: " + runReference);
         }
 
         @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> data = (java.util.Map<String, Object>) map;
+        Map<String, Object> data = (Map<String, Object>) map;
 
-        // ApiResponse wraps in "data" field
         Object innerData = data.get("data");
-        if (innerData instanceof java.util.Map<?, ?> inner) {
-            data = (java.util.Map<String, Object>) inner;
+        if (innerData instanceof Map<?, ?> inner) {
+            //noinspection unchecked
+            data = (Map<String, Object>) inner;
         }
 
-        Object profileIdObj   = data.get("profileId");
-        Object rawMessageObj  = data.get("rawMessage");
-        Object aiEnabledObj   = data.get("aiEnabled");
+        Object profileIdObj  = data.get("profileId");
+        Object rawMessageObj = data.get("rawMessage");
+        Object aiEnabledObj  = data.get("aiEnabled");
 
         if (profileIdObj == null || rawMessageObj == null) {
             throw new RuntimeException("Original run data incomplete for rerun: " + runReference);
@@ -323,9 +380,7 @@ public class ValidationServiceImpl implements ValidationService {
         return validate(rerunRequest, userId, correlationId);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Private helpers
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     private String determineStatus(List<ValidationErrorDTO> errors) {
         if (errors.isEmpty()) return "PASSED";
@@ -368,20 +423,14 @@ public class ValidationServiceImpl implements ValidationService {
                         .durationMs(durationMs)
                         .skipped(false)
                         .build();
-            } else {
-                return AiResultDTO.builder()
-                        .durationMs(durationMs)
-                        .skipped(true)
-                        .skipReason("AI_UNAVAILABLE")
-                        .build();
             }
+            return AiResultDTO.builder()
+                    .durationMs(durationMs).skipped(true).skipReason("AI_UNAVAILABLE").build();
         } catch (Exception e) {
-            log.warn("[AI] explain failed for profileId={} mti={}: {}", profileId, mti, e.getMessage());
+            log.warn("[AI] explain failed profileId={} mti={}: {}", profileId, mti, e.getMessage());
             return AiResultDTO.builder()
                     .durationMs(System.currentTimeMillis() - start)
-                    .skipped(true)
-                    .skipReason("AI_UNAVAILABLE")
-                    .build();
+                    .skipped(true).skipReason("AI_UNAVAILABLE").build();
         }
     }
 
@@ -389,7 +438,7 @@ public class ValidationServiceImpl implements ValidationService {
                                                       Map<Integer, String> rawFields,
                                                       Map<Integer, String> deFieldNames) {
         return maskedFields.entrySet().stream()
-                .filter(e -> e.getKey() > 0) // exclude MTI (key=0)
+                .filter(e -> e.getKey() > 0)
                 .sorted(Map.Entry.comparingByKey())
                 .map(e -> {
                     int de = e.getKey();
@@ -404,43 +453,33 @@ public class ValidationServiceImpl implements ValidationService {
     }
 
     private BitmapDTO computeBitmap(Map<Integer, String> fields) {
-        boolean hasSecondary = fields.keySet().stream()
-                .anyMatch(k -> k >= 65 && k <= 128);
-
+        boolean hasSecondary = fields.keySet().stream().anyMatch(k -> k >= 65 && k <= 128);
         long primaryBits = 0L;
-        if (hasSecondary) primaryBits |= (1L << 63); // bit 1 signals secondary bitmap present
+        if (hasSecondary) primaryBits |= (1L << 63);
         for (int de = 2; de <= 64; de++) {
-            if (fields.containsKey(de)) {
-                primaryBits |= (1L << (64 - de));
-            }
+            if (fields.containsKey(de)) primaryBits |= (1L << (64 - de));
         }
-
         String primary = String.format("%016X", primaryBits);
-
         String secondary = null;
         if (hasSecondary) {
             long secondaryBits = 0L;
             for (int de = 65; de <= 128; de++) {
-                if (fields.containsKey(de)) {
-                    secondaryBits |= (1L << (128 - de));
-                }
+                if (fields.containsKey(de)) secondaryBits |= (1L << (128 - de));
             }
             secondary = String.format("%016X", secondaryBits);
         }
-
         return BitmapDTO.builder().primary(primary).secondary(secondary).build();
     }
 
-    private String normaliseDeNumber(String deNumber) {
-        if (deNumber == null) return "";
-        return deNumber.toUpperCase().replace("DE", "").trim();
+    private Long parseLong(String val) {
+        if (val == null) return null;
+        try { return Long.parseLong(val.replaceAll("^0+", "").isBlank() ? "0" : val.replaceAll("^0+", "")); }
+        catch (NumberFormatException e) { return null; }
     }
 
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            sb.append(String.format("%02X", b));
-        }
+        for (byte b : bytes) sb.append(String.format("%02X", b));
         return sb.toString();
     }
 }

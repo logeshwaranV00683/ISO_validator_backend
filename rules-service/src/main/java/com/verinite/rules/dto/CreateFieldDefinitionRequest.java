@@ -21,9 +21,8 @@ public class CreateFieldDefinitionRequest {
     @NotBlank(message = "fieldName is required")
     private String fieldName;
 
-    @NotBlank(message = "dataType is required")
-    @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special",
-            message = "dataType must be: numeric | alpha | alphanumeric | binary | special")
+    // FIX: @Pattern and @NotBlank cannot be applied to enum — use @NotNull
+    @NotNull(message = "dataType is required")
     private DataType dataType;
 
     @NotNull(message = "maxLength is required")
@@ -36,5 +35,5 @@ public class CreateFieldDefinitionRequest {
     private Integer displayOrder     = 0;
     private Boolean isBuilderVisible = true;
     private Boolean isActive         = true;
-    private String description;
+    private String  description;
 }

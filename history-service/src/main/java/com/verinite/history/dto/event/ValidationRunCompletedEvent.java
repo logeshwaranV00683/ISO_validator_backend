@@ -1,4 +1,4 @@
-package com.verinite.history_service.dto.event;
+package com.verinite.history.dto.event;   // FIX: was com.verinite.history_service.dto.event
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +21,6 @@ public class ValidationRunCompletedEvent {
     private String correlationId;
     private LocalDateTime timestamp;
 
-    // Core run data
     private String runReference;
     private Long profileId;
     private String profileNameSnapshot;
@@ -60,14 +59,10 @@ public class ValidationRunCompletedEvent {
     private String originalRunReference;
     private String clientIp;
 
-    // Nested data
     private List<ParsedFieldEvent> parsedFields;
     private List<ValidationErrorEvent> errors;
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
+    @Data @NoArgsConstructor @AllArgsConstructor @Builder
     public static class ParsedFieldEvent {
         private String deNumber;
         private String fieldName;
@@ -79,10 +74,7 @@ public class ValidationRunCompletedEvent {
         private String encodingType;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
+    @Data @NoArgsConstructor @AllArgsConstructor @Builder
     public static class ValidationErrorEvent {
         private String deNumber;
         private String fieldName;

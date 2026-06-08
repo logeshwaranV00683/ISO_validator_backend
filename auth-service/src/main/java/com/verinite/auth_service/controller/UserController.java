@@ -2,6 +2,7 @@ package com.verinite.auth_service.controller;
 
 import com.verinite.auth_service.dto.CreateUserRequest;
 import com.verinite.auth_service.dto.SessionDto;
+import com.verinite.auth_service.dto.UpdateUserRequest;
 import com.verinite.auth_service.dto.UserDto;
 import com.verinite.auth_service.entity.UserSession;
 import com.verinite.auth_service.repository.UserSessionRepository;
@@ -10,6 +11,9 @@ import com.verinite.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,13 +38,23 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserDto>> createUser(
             @RequestBody @Valid CreateUserRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(userService.createUser(request), "User created successfully"));
+                .body(ApiResponse.success(userService.createUser(request), "User created"));
     }
 
+    // GAP 5 FIX: now paginated
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST','VIEWER')")
-    public ResponseEntity<ApiResponse<List<UserDto>>> getUsers() {
-        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(), "Users fetched"));
+    public ResponseEntity<ApiResponse<Page<UserDto>>> getUsers(
+            @RequestParam(defaultValue = "0")        int    page,
+            @RequestParam(defaultValue = "20")       int    size,
+            @RequestParam(defaultValue = "username") String sortBy,
+            @RequestParam(defaultValue = "asc")      String sortDir) {
+
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+        Page<UserDto> result = userService.getAllUsers(PageRequest.of(page, size, sort));
+        return ResponseEntity.ok(ApiResponse.success(result, "Users fetched"));
     }
 
     @GetMapping("/{id}")
@@ -49,10 +63,12 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id), "User fetched"));
     }
 
+    // BUG 2 FIX: UpdateUserRequest — no password field
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> updateUser(
-            @PathVariable Long id, @RequestBody @Valid CreateUserRequest request) {
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request), "User updated"));
     }
 
@@ -67,7 +83,8 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> toggleStatus(
             @PathVariable Long id, @RequestParam boolean active) {
-        return ResponseEntity.ok(ApiResponse.success(userService.setActive(id, active),
+        return ResponseEntity.ok(ApiResponse.success(
+                userService.setActive(id, active),
                 active ? "User activated" : "User deactivated"));
     }
 
@@ -86,7 +103,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(null, "Password reset"));
     }
 
-    /** GET /users/{id}/sessions — ADMIN: list all sessions for a user */
     @GetMapping("/{id}/sessions")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<SessionDto>>> listSessions(@PathVariable Long id) {
@@ -98,7 +114,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(sessions, "Sessions fetched"));
     }
 
-    /** DELETE /users/{id}/sessions — ADMIN: revoke all active sessions for a user */
     @DeleteMapping("/{id}/sessions")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> revokeAllSessions(@PathVariable Long id) {

@@ -18,41 +18,55 @@ public class AuditLogConsumer {
     @RabbitListener(queues = "history.audit-logs")
     public void consumeAuditEvent(AuditLogEvent event) {
 
+        if (event == null) {
+            log.warn("[AuditConsumer] Received null event — skipping");
+            return;
+        }
+
+        // FIX: extract from nested payload; previous code read null top-level fields
+        AuditLogEvent.Payload p = event.getPayload();
+        if (p == null) {
+            log.warn("[AuditConsumer] Event has no payload — source={} eventId={}",
+                    event.getSourceService(), event.getEventId());
+            return;
+        }
+
         log.info("[AuditConsumer] Received | source={} action={} entity={} correlationId={}",
-                event.getSourceService(),
-                event.getAction(),
-                event.getEntityType(),
-                event.getCorrelationId());
+                event.getSourceService(), p.getAction(), p.getEntityType(),
+                p.getCorrelationId() != null ? p.getCorrelationId() : event.getCorrelationId());
 
         try {
+            // Normalise before/after value field names — different publishers use different names
+            String oldVal = p.getOldValue()    != null ? p.getOldValue()    : p.getBeforeValue();
+            String newVal = p.getNewValue()    != null ? p.getNewValue()    : p.getAfterValue();
+            String corrId = p.getCorrelationId() != null
+                    ? p.getCorrelationId() : event.getCorrelationId();
+
             AuditLog auditLog = AuditLog.builder()
-                    .userId(event.getUserId())
-                    .usernameSnapshot(event.getUsername())       // schema: username_snapshot
-                    .userRole(event.getUserRole())
+                    .userId(p.getUserId())
+                    .usernameSnapshot(p.getUsername())
+                    .userRole(p.getUserRole())
                     .sourceService(event.getSourceService())
-                    .action(event.getAction())
-                    .entityType(event.getEntityType())
-                    .entityId(event.getEntityId() != null       // schema: VARCHAR(50)
-                            ? String.valueOf(event.getEntityId()) : null)
-                    .entityName(event.getEntityName())
-                    .oldValue(event.getBeforeValue())           // schema: old_value
-                    .newValue(event.getAfterValue())            // schema: new_value
-                    .description(event.getDescription())
-                    .ipAddress(event.getIpAddress())
-                    .correlationId(event.getCorrelationId())
+                    .action(p.getAction())
+                    .entityType(p.getEntityType())
+                    .entityId(p.getEntityId() != null ? String.valueOf(p.getEntityId()) : null)
+                    .entityName(p.getEntityName())
+                    .oldValue(oldVal)
+                    .newValue(newVal)
+                    .description(p.getDescription())
+                    .ipAddress(p.getIpAddress())
+                    .correlationId(corrId)
                     .build();
 
             auditLogRepository.save(auditLog);
 
             log.info("[AuditConsumer] Saved | id={} action={} entityType={} entityId={}",
-                    auditLog.getId(),
-                    auditLog.getAction(),
-                    auditLog.getEntityType(),
-                    auditLog.getEntityId());
+                    auditLog.getId(), auditLog.getAction(),
+                    auditLog.getEntityType(), auditLog.getEntityId());
 
         } catch (Exception e) {
-            log.error("[AuditConsumer] Failed to persist | correlationId={} error={}",
-                    event.getCorrelationId(), e.getMessage(), e);
+            log.error("[AuditConsumer] Failed to persist | eventId={} error={}",
+                    event.getEventId(), e.getMessage(), e);
         }
     }
 }

@@ -1,14 +1,11 @@
-package com.verinite.history_service.dto.response;
+package com.verinite.history.dto.response;   // FIX: was com.verinite.history_service.dto.response
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class ValidationRunFieldDto {
 
     private String deNumber;

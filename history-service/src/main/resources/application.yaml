@@ -53,3 +53,14 @@ logging:
   level:
     com.verinite.history_service: INFO
     org.springframework.amqp: WARN
+
+# Add to application.yaml/yml of each service (GAP 4)
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+    tags-sorter: alpha
+    operations-sorter: method
+  show-actuator: false

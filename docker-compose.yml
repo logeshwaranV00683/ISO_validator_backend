@@ -1,101 +1,89 @@
-version: '3.8'
+version: '3.9'
 
-# ================================================================
-# ISO Validator — Infrastructure (Dev Local)
-# MySQL is intentionally excluded — use your local instance on 3306
-# Start: docker-compose up -d
-# Stop:  docker-compose down
-# Logs:  docker-compose logs -f
-# ================================================================
+# ═══════════════════════════════════════════════════════════════════════════
+#  ISO 8583 Validator — Infrastructure Docker Compose
+#  Starts: MySQL, RabbitMQ, Redis, Ollama
+#  Spring Boot services start separately — see README.md startup order
+# ═══════════════════════════════════════════════════════════════════════════
 
 services:
-#
-#  mysql:
-#    image: mysql:8.0
-#    container_name: iso-validator-mysql
-#    restart: unless-stopped
-#    ports:
-#      - "3306:3306"
-#    environment:
-#      MYSQL_ROOT_PASSWORD: root
-#      MYSQL_DATABASE: iso_validator_db
-#    volumes:
-#      - mysql_data:/var/lib/mysql
-#      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-#      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
-#    healthcheck:
-#      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot" ]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#      start_period: 30s
 
-  # ─────────────────────────────────────────────
-  # Redis 7 — Rate limiting + Gateway route cache
-  # + Run reference counter (INCR VLD-YYYYMMDD)
-  # Port: 6379
-  # ─────────────────────────────────────────────
+  # ── MySQL 8.0 ─────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: iso-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: iso_validator_db
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── RabbitMQ 3.x with Management UI ──────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: iso-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI  →  http://localhost:15672  guest/guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
-    container_name: iso-validator-redis
+    image: redis:7.2-alpine
+    container_name: iso-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --loglevel notice
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 10s
 
-  # ─────────────────────────────────────────────
-  # RabbitMQ 3 — Async messaging
-  # Exchanges: validation.events / audit.events / cache.invalidation
-  # AMQP port:       5672
-  # Management UI:   15672  (guest / guest)
-  #   → http://localhost:15672
-  # ─────────────────────────────────────────────
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: iso-validator-rabbitmq
-    restart: unless-stopped
-    ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Management UI
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-      RABBITMQ_DEFAULT_VHOST: /
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_running", "-q"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-
+  # ── Ollama (AI — optional) ─────────────────────────────────────────────────
+  # Remove this block if running Ollama natively or on a separate machine.
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: iso-ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0:11434
-    restart: unless-stopped
+    # Pull mistral:7b on first start (takes a few minutes)
+    # entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull mistral:7b && wait"]
 
-# ─────────────────────────────────────────────
-# Named volumes — persist data across restarts
-# ─────────────────────────────────────────────
 volumes:
-  redis_data:
-    name: iso_validator_redis_data
+  mysql_data:
   rabbitmq_data:
-    name: iso_validator_rabbitmq_data
+  redis_data:
   ollama_data:
-    name: iso_validator_ollama_data

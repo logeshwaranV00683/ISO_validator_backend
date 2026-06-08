@@ -12,7 +12,6 @@ import java.util.List;
 @AllArgsConstructor
 public class CreateRuleRequest {
 
-    // profileId / profileName / mti may be injected by BulkImportRulesRequest
     private Long   profileId;
     private String profileName;
 
@@ -31,16 +30,15 @@ public class CreateRuleRequest {
     private Integer maxLength;
     private Integer exactLength;
 
-    @NotBlank(message = "dataType is required")
-    @Pattern(regexp = "numeric|alpha|alphanumeric|binary|special",
-            message = "dataType must be: numeric | alpha | alphanumeric | binary | special")
+    // FIX: @Pattern and @NotBlank cannot be applied to an enum — use @NotNull
+    @NotNull(message = "dataType is required")
     private DataType dataType;
 
     private String patternRegex;
 
-    @Pattern(regexp = "CRITICAL|WARNING|INFO",
-            message = "severity must be CRITICAL, WARNING, or INFO")
-    private Severity severity = Severity.CRITICAL;
+    // FIX: @Pattern cannot be applied to an enum — validation via @NotNull only
+    @NotNull(message = "severity is required")
+    private Severity severity;
 
     private Integer priority = 1;
 
