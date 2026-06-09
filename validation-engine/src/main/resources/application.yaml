@@ -32,6 +32,10 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
     fetch-registry: true
     register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    ip-address: 127.0.0.1     # ← ADD
+    hostname: localhost
 
 # ── Feign ─────────────────────────────────────────────────────────────────────
 feign:

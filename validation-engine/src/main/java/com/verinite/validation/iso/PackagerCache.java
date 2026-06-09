@@ -3,40 +3,27 @@ package com.verinite.validation.iso;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
-import org.jpos.iso.ISOPackager;
 import org.jpos.iso.packager.GenericPackager;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.regex.Pattern;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
 public class PackagerCache {
 
-    // DOCTYPE causes SAXParseException when the external DTD URL can't be fetched
-    private static final Pattern DOCTYPE_PATTERN =
-            Pattern.compile("(?s)<!DOCTYPE[^\\[>]*(?:\\[[^\\]]*])?\\s*>\\s*");
+    // key = formatId, value = loaded packager
+    private final Cache<Long, GenericPackager> cache = Caffeine.newBuilder()
+            .maximumSize(50)
+            .expireAfterWrite(30, TimeUnit.MINUTES)
+            .recordStats()
+            .build();
 
-    private final Cache<Long, ISOPackager> cache =
-            Caffeine.newBuilder()
-                    .maximumSize(50)
-                    .build();
-
-    public ISOPackager get(Long formatId, String xmlContent) {
-        return cache.get(formatId, id -> {
-            log.info("PackagerCache MISS — loading formatId={}", formatId);
-            try {
-                String cleanXml = stripDoctype(xmlContent);
-                byte[] xmlBytes = cleanXml.getBytes(StandardCharsets.UTF_8);
-                return new GenericPackager(new ByteArrayInputStream(xmlBytes));
-            } catch (Exception e) {
-                throw new RuntimeException(
-                        "Failed to load GenericPackager for formatId=" + formatId
-                                + ": " + e.getMessage(), e);
-            }
-        });
+    public GenericPackager get(Long formatId, String xmlContent) {
+        return cache.get(formatId, id -> loadPackager(id, xmlContent));
     }
 
     public void evict(Long formatId) {
@@ -46,27 +33,65 @@ public class PackagerCache {
 
     public void evictAll() {
         cache.invalidateAll();
-        log.info("PackagerCache evicted ALL entries");
+        log.info("PackagerCache evicted ALL");
+    }
+
+    // ── private ───────────────────────────────────────────────────────────────
+
+    private GenericPackager loadPackager(Long formatId, String xmlContent) {
+        log.info("PackagerCache MISS — loading formatId={}", formatId);
+
+        String cleanXml = preprocessXml(formatId, xmlContent);
+        byte[] xmlBytes = cleanXml.getBytes(StandardCharsets.UTF_8);
+
+        try (InputStream is = new ByteArrayInputStream(xmlBytes)) {
+            GenericPackager packager = new GenericPackager(is);
+            int maxField = packager.getFieldPackager(0).getLength()-1;
+
+            log.info("PackagerCache loaded formatId={} maxField={}",
+                    formatId, maxField);
+            return packager;
+
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to load GenericPackager for formatId=" + formatId
+                            + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Sanitise the XML string before feeding it to jPOS GenericPackager.
+     * Common issues from DB-stored XML:
+     *  1. Leading/trailing whitespace or BOM character
+     *  2. Windows CRLF line endings causing SAX column-count drift
+     *  3. Missing XML declaration — jPOS doesn't require it but some parsers
+     *     emit "no grammar found" when it's absent and XML is in validating mode
+     */
+    private String preprocessXml(Long formatId, String xmlContent) {
+        if (xmlContent == null || xmlContent.isBlank()) {
+            throw new RuntimeException("xmlContent is null or blank for formatId=" + formatId);
+        }
+
+        // Strip UTF-8 BOM
+        String s = xmlContent.startsWith("\uFEFF")
+                ? xmlContent.substring(1)
+                : xmlContent;
+
+        s = s.strip();
+
+        // Normalise line endings
+        s = s.replace("\r\n", "\n").replace("\r", "\n");
+
+        // Ensure XML declaration is present — some SAX parsers behave better with it
+        if (!s.startsWith("<?xml")) {
+            s = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + s;
+        }
+
+        log.debug("PackagerCache preprocessed XML for formatId={} length={}", formatId, s.length());
+        return s;
     }
 
     public long size() {
         return cache.estimatedSize();
-    }
-
-    /** Strip DOCTYPE declaration so the SAX parser never tries to resolve the external DTD URL. */
-    private String stripDoctype(String xmlContent) {
-        String result = DOCTYPE_PATTERN.matcher(xmlContent).replaceAll("").trim();
-        if (!result.startsWith("<?xml") && !result.startsWith("<isopackager")) {
-            // Make sure the XML declaration is still there if it was there before
-            if (xmlContent.startsWith("<?xml")) {
-                int firstTag = xmlContent.indexOf("<?xml");
-                int endOfDecl = xmlContent.indexOf("?>", firstTag) + 2;
-                String xmlDecl = xmlContent.substring(firstTag, endOfDecl);
-                if (!result.startsWith("<?xml")) {
-                    result = xmlDecl + "\n" + result;
-                }
-            }
-        }
-        return result;
     }
 }
