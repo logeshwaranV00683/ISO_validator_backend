@@ -41,7 +41,7 @@ public class RabbitMQConfig {
     // ═══════════════════════════════════════════════════════════════
 
     /** Direct exchange — validation-engine publishes with this key */
-    public static final String VALIDATION_RUN_ROUTING_KEY    = "validation.run";
+    public static final String VALIDATION_RUN_ROUTING_KEY = "run.completed";
 
     /** Topic exchange — history-service consumes everything: audit.rule.*, audit.field_definition.*, etc. */
     public static final String AUDIT_WILDCARD_KEY            = "audit.#";

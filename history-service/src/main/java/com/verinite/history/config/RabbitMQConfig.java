@@ -14,19 +14,21 @@ public class RabbitMQConfig {
     public static final String AUDIT_EXCHANGE      = "audit.events";
     public static final String VALIDATION_EXCHANGE = "validation.events";
 
-    // ── DLX — must match validation-engine's RabbitMQConfig exactly ──────────
+    // ── DLX names — must match rules-service's RabbitMQConfig exactly ────────
+    public static final String AUDIT_EVENTS_DLX      = "audit.events.dlx";
     public static final String VALIDATION_EVENTS_DLX = "validation.events.dlx";
 
     public static final String AUDIT_QUEUE      = "history.audit-logs";
     public static final String VALIDATION_QUEUE = "history.validation-runs";
 
-    // ── DLQ for this service's validation queue consumer ─────────────────────
+    // ── DLQs ──────────────────────────────────────────────────────────────────
+    public static final String AUDIT_LOGS_DLQ      = "history.audit-logs.dlq";
     public static final String VALIDATION_RUNS_DLQ = "history.validation-runs.dlq";
 
     public static final String AUDIT_ROUTING_KEY      = "audit.#";
-    public static final String VALIDATION_ROUTING_KEY = "validation.run";
+    public static final String VALIDATION_ROUTING_KEY = "run.completed";
 
-    // ── Exchanges ─────────────────────────────────────────────────────────────
+    // ── Main Exchanges ─────────────────────────────────────────────────────────
 
     @Bean
     public TopicExchange auditExchange() {
@@ -38,18 +40,25 @@ public class RabbitMQConfig {
         return ExchangeBuilder.directExchange(VALIDATION_EXCHANGE).durable(true).build();
     }
 
-    // FIX: Declare the DLX here too — both services must declare the same exchange.
-    // RabbitMQ is idempotent for identical declarations; declaring it in both services is safe.
+    // ── DLX Exchanges — RabbitMQ declaration is idempotent; safe to declare in both services ──
+
+    @Bean
+    public FanoutExchange auditEventsDlx() {
+        return new FanoutExchange(AUDIT_EVENTS_DLX, true, false);
+    }
+
     @Bean
     public FanoutExchange validationEventsDlx() {
         return new FanoutExchange(VALIDATION_EVENTS_DLX, true, false);
     }
 
-    // ── Queues ────────────────────────────────────────────────────────────────
+    // ── Main Queues — x-dead-letter-exchange must match rules-service exactly ──
 
     @Bean
     public Queue auditQueue() {
-        return QueueBuilder.durable(AUDIT_QUEUE).build();
+        return QueueBuilder.durable(AUDIT_QUEUE)
+                .withArgument("x-dead-letter-exchange", AUDIT_EVENTS_DLX)
+                .build();
     }
 
     // FIX: Added x-dead-letter-exchange to match validation-engine's declaration exactly.
@@ -62,13 +71,19 @@ public class RabbitMQConfig {
                 .build();
     }
 
-    // FIX: Declare the DLQ here too — mirrors validation-engine topology
+    // ── DLQs ──────────────────────────────────────────────────────────────────
+
+    @Bean
+    public Queue auditLogsDlq() {
+        return QueueBuilder.durable(AUDIT_LOGS_DLQ).build();
+    }
+
     @Bean
     public Queue validationRunsDlq() {
         return QueueBuilder.durable(VALIDATION_RUNS_DLQ).build();
     }
 
-    // ── Bindings ──────────────────────────────────────────────────────────────
+    // ── Main Bindings ──────────────────────────────────────────────────────────
 
     @Bean
     public Binding auditBinding(Queue auditQueue, TopicExchange auditExchange) {
@@ -83,13 +98,21 @@ public class RabbitMQConfig {
                 .with(VALIDATION_ROUTING_KEY);
     }
 
+    // ── DLQ Bindings ──────────────────────────────────────────────────────────
+
+    @Bean
+    public Binding auditLogsDlqBinding(Queue auditLogsDlq,
+                                       FanoutExchange auditEventsDlx) {
+        return BindingBuilder.bind(auditLogsDlq).to(auditEventsDlx);
+    }
+
     @Bean
     public Binding validationRunsDlqBinding(Queue validationRunsDlq,
                                             FanoutExchange validationEventsDlx) {
         return BindingBuilder.bind(validationRunsDlq).to(validationEventsDlx);
     }
 
-    // ── Serialization ─────────────────────────────────────────────────────────
+    // ── Serialization ──────────────────────────────────────────────────────────
 
     @Bean
     public MessageConverter jacksonMessageConverter() {

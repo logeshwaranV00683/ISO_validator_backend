@@ -26,7 +26,7 @@ public class RabbitMQConfig {
     public static final String VALIDATION_ENGINE_CACHE_DLQ     = "validation-engine.cache-invalidation.dlq";
 
     // ── Routing key ─────────────────────────────────────────────────────────
-    public static final String VALIDATION_RUN_ROUTING_KEY = "validation.run";
+    public static final String VALIDATION_RUN_ROUTING_KEY = "run.completed";
 
     // ── Main exchanges ──────────────────────────────────────────────────────
 
