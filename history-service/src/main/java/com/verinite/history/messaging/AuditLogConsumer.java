@@ -1,5 +1,6 @@
 package com.verinite.history.messaging;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verinite.history.dto.event.AuditLogEvent;
 import com.verinite.history.entity.AuditLog;
 import com.verinite.history.repository.AuditLogRepository;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class AuditLogConsumer {
 
     private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper       objectMapper;   // Spring Boot auto-configures this
 
     @RabbitListener(queues = "history.audit-logs")
     public void consumeAuditEvent(AuditLogEvent event) {
@@ -23,7 +25,6 @@ public class AuditLogConsumer {
             return;
         }
 
-        // FIX: extract from nested payload; previous code read null top-level fields
         AuditLogEvent.Payload p = event.getPayload();
         if (p == null) {
             log.warn("[AuditConsumer] Event has no payload — source={} eventId={}",
@@ -36,7 +37,6 @@ public class AuditLogConsumer {
                 p.getCorrelationId() != null ? p.getCorrelationId() : event.getCorrelationId());
 
         try {
-            // Normalise before/after value field names — different publishers use different names
             String oldVal = p.getOldValue()    != null ? p.getOldValue()    : p.getBeforeValue();
             String newVal = p.getNewValue()    != null ? p.getNewValue()    : p.getAfterValue();
             String corrId = p.getCorrelationId() != null
@@ -51,8 +51,9 @@ public class AuditLogConsumer {
                     .entityType(p.getEntityType())
                     .entityId(p.getEntityId() != null ? String.valueOf(p.getEntityId()) : null)
                     .entityName(p.getEntityName())
-                    .oldValue(oldVal)
-                    .newValue(newVal)
+                    // FIX: MySQL JSON column rejects plain strings — wrap as JSON
+                    .oldValue(toJson(oldVal))
+                    .newValue(toJson(newVal))
                     .description(p.getDescription())
                     .ipAddress(p.getIpAddress())
                     .correlationId(corrId)
@@ -67,6 +68,37 @@ public class AuditLogConsumer {
         } catch (Exception e) {
             log.error("[AuditConsumer] Failed to persist | eventId={} error={}",
                     event.getEventId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Ensure the value is valid JSON before writing to a MySQL JSON column.
+     * If it's already valid JSON (object, array, or quoted string) → keep as-is.
+     * If it's a plain string → wrap as a JSON string literal.
+     * If null or blank → return null.
+     */
+    private String toJson(String value) {
+        if (value == null || value.isBlank()) return null;
+        String v = value.trim();
+        // Already valid JSON?
+        if (v.startsWith("{") || v.startsWith("[")) {
+            try {
+                objectMapper.readTree(v);
+                return v;   // valid JSON object or array
+            } catch (Exception ignored) { /* fall through to wrap */ }
+        }
+        if (v.startsWith("\"") && v.endsWith("\"")) {
+            try {
+                objectMapper.readTree(v);
+                return v;   // valid JSON string
+            } catch (Exception ignored) { /* fall through to wrap */ }
+        }
+        // Plain string — serialize as a JSON string literal
+        try {
+            return objectMapper.writeValueAsString(v);
+        } catch (Exception e) {
+            log.warn("[AuditConsumer] Could not serialize value as JSON — storing null. value={}", v);
+            return null;
         }
     }
 }

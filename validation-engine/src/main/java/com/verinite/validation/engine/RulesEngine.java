@@ -161,7 +161,8 @@ public class RulesEngine {
                 .deNumber(deRef)
                 .deNumberInt(deNumber)
                 .fieldName(fieldName)
-                .message(message)
+                .issueDescription(message)   // renamed from .message()
+                .ruleSnapshot(deRef + " " + ruleType + " rule")
                 .build();
     }
 }

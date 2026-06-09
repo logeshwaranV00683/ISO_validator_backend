@@ -44,7 +44,7 @@ INSERT INTO system_config (config_key, config_value, config_type, description, i
 
 INSERT INTO ollama_config (config_key, config_value, config_type, description, is_sensitive, updated_by) VALUES
 ('ollama.enabled',         'true',                    'BOOLEAN', 'Enable/disable Ollama AI integration globally',             FALSE, 'SYSTEM'),
-('ollama.endpoint',        'http://localhost:11434',  'STRING',  'Ollama API base URL',                                       FALSE, 'SYSTEM'),
+('ollama.endpoint',        'http://localhost:11434/api/generates',  'STRING',  'Ollama API base URL',                                       FALSE, 'SYSTEM'),
 ('ollama.model',           'mistral:7b',              'STRING',  'Default model for explanations',                            FALSE, 'SYSTEM'),
 ('ollama.timeout.ms',      '20000',                   'INTEGER', 'HTTP request timeout in milliseconds',                      FALSE, 'SYSTEM'),
 ('ollama.max.tokens',      '500',                     'INTEGER', 'Max tokens in Ollama response',                             FALSE, 'SYSTEM'),

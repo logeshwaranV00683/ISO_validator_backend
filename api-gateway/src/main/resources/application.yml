@@ -4,20 +4,19 @@ server:
 spring:
   application:
     name: api-gateway
+  config:
+    import: "optional:configserver:http://localhost:8888"
 
   cloud:
     gateway:
       routes:
-        # ── Auth Service ─────────────────────────────────────────────────────
         - id: auth-service
           uri: lb://auth-service
           predicates:
             - Path=/auth/**, /users/**, /config/**
           filters:
             - StripPrefix=0
-          # NOTE: No JwtAuthFilter here — login/logout are public routes
 
-        # ── Profile Service ───────────────────────────────────────────────────
         - id: profile-service
           uri: lb://profile-service
           predicates:
@@ -25,7 +24,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # ── Rules Service ─────────────────────────────────────────────────────
         - id: rules-service
           uri: lb://rules-service
           predicates:
@@ -33,7 +31,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # ── Validation Engine ─────────────────────────────────────────────────
         - id: validation-engine
           uri: lb://validation-engine
           predicates:
@@ -41,7 +38,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # ── AI Service ────────────────────────────────────────────────────────
         - id: ai-service
           uri: lb://ai-service
           predicates:
@@ -49,7 +45,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # ── History Service ───────────────────────────────────────────────────
         - id: history-service
           uri: lb://history-service
           predicates:
@@ -57,24 +52,26 @@ spring:
           filters:
             - StripPrefix=0
 
-      # Global default filters applied to every route
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
 
-        - name: RequestRateLimiter
-          args:
-            redis-rate-limiter.replenishRate: 20
-            redis-rate-limiter.burstCapacity: 40
-            redis-rate-limiter.requestedTokens: 1
-            key-resolver: "#{@userKeyResolver}"
+      # Rate limiter is DISABLED globally — enable per-route in production by uncommenting below.
+      # Requires Redis. If Redis is not running, leaving this in default-filters causes 500 on
+      # every request. Re-enable once Redis is confirmed available.
+      #      - name: RequestRateLimiter
+      #        args:
+      #          redis-rate-limiter.replenishRate: 20
+      #          redis-rate-limiter.burstCapacity: 40
+      #          redis-rate-limiter.requestedTokens: 1
+      #          key-resolver: "#{@userKeyResolver}"
 
-  # Redis — used by RequestRateLimiter (wired up in later days)
   data:
     redis:
       host: localhost
       port: 6379
+      timeout: 500ms
+      connect-timeout: 500ms
 
-# Eureka — register with service registry
 eureka:
   client:
     service-url:
@@ -82,7 +79,6 @@ eureka:
   instance:
     prefer-ip-address: true
 
-# Actuator — expose health + gateway route inspector
 management:
   endpoints:
     web:
@@ -96,5 +92,5 @@ management:
 
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG   # Shows route matching — useful Day 1
+    org.springframework.cloud.gateway: INFO
     com.verinite.gateway: DEBUG

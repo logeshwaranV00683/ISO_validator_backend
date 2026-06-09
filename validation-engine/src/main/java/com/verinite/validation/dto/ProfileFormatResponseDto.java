@@ -4,10 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Mirrors profile-service's ProfileFormatResponse.
- * Returned by GET /internal/profiles/{profileId}/format
- */
 @Data
 @NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -16,4 +12,5 @@ public class ProfileFormatResponseDto {
     private String xmlContent;
     private String mti;
     private Long   profileId;
+    private String profileName;   // added — populated by profile-service
 }

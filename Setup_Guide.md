@@ -60,11 +60,11 @@ Pull a model:
 The container starts empty. You must download a model:
 
 ```
-docker exec -it ollama ollama pull mistral
+docker exec -it iso-ollama ollama pull mistral
 
 or
 
-docker exec -it ollama ollama pull llama3.2
+docker exec -it iso-ollama ollama pull llama3.2
 
 ```
 

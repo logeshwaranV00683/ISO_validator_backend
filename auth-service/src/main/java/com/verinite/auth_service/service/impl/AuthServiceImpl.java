@@ -1,15 +1,16 @@
 package com.verinite.auth_service.service.impl;
 
-import com.verinite.auth_service.exception.ResourceNotFoundException;
-import com.verinite.auth_service.util.AuthConstants;
 import com.verinite.auth_service.dto.LoginRequest;
 import com.verinite.auth_service.dto.LoginResponse;
 import com.verinite.auth_service.entity.User;
 import com.verinite.auth_service.entity.UserSession;
+import com.verinite.auth_service.exception.ResourceNotFoundException;
 import com.verinite.auth_service.repository.UserRepository;
 import com.verinite.auth_service.repository.UserSessionRepository;
 import com.verinite.auth_service.service.AuthService;
 import com.verinite.auth_service.service.LoginAttemptService;
+import com.verinite.auth_service.service.SystemConfigService;
+import com.verinite.auth_service.util.AuthConstants;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,27 +34,23 @@ import java.util.UUID;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
-    private final UserRepository userRepository;
+    private final UserRepository      userRepository;
     private final UserSessionRepository sessionRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final PrivateKey jwtPrivateKey;
+    private final PasswordEncoder     passwordEncoder;
+    private final PrivateKey          jwtPrivateKey;
     private final LoginAttemptService loginAttemptService;
+    private final SystemConfigService systemConfigService;
 
     @Value("${jwt.expiry-minutes:60}")
     private int expiryMinutes;
 
     @Override
     @Transactional
-    public LoginResponse login(
-            LoginRequest request,
-            String ipAddress,
-            String userAgent
-    ) {
+    public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
 
         User user = userRepository
                 .findByUsernameAndDeletedAtIsNull(request.getUsername())
-                .orElseThrow(() ->
-                        new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
 
         if (user.getLockedUntil() != null
                 && user.getLockedUntil().isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
@@ -66,40 +63,30 @@ public class AuthServiceImpl implements AuthService {
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
 
-            // Compute the new count locally — we know recordFailedAttempt
-            // increments by exactly 1 and locks when it hits MAX_FAILURES.
-            // This avoids any Hibernate L1-cache / cross-transaction visibility issue.
-            int newCount = user.getFailedLoginCount() + 1;
+            int maxFailures = systemConfigService.getInt("max_login_failures", AuthConstants.MAX_FAILURES);
+            int lockMinutes = systemConfigService.getInt("account_lock_minutes", AuthConstants.LOCK_MINUTES);
+            int newCount    = user.getFailedLoginCount() + 1;
 
             loginAttemptService.recordFailedAttempt(user.getId());
 
-            if (newCount >= AuthConstants.MAX_FAILURES) {
+            if (newCount >= maxFailures) {
                 throw new RuntimeException(
-                        "Too many failed attempts. Account locked for "
-                                + AuthConstants.LOCK_MINUTES
-                                + " minutes."
-                );
+                        "Too many failed attempts. Account locked for " + lockMinutes + " minutes.");
             }
 
-            int remaining = AuthConstants.MAX_FAILURES - newCount;
-
             throw new RuntimeException(
-                    "Invalid username or password. "
-                            + remaining
-                            + " attempt(s) remaining."
-            );
+                    "Invalid username or password. " + (maxFailures - newCount) + " attempt(s) remaining.");
         }
 
         user.setFailedLoginCount(0);
         user.setLockedUntil(null);
         user.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
         user.setLastLoginIp(ipAddress);
-
         userRepository.save(user);
 
-        String jti = UUID.randomUUID().toString();
-        Date issuedAt = new Date();
-        Date expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
+        String jti       = UUID.randomUUID().toString();
+        Date   issuedAt  = new Date();
+        Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
 
         String token = Jwts.builder()
                 .subject(String.valueOf(user.getId()))
@@ -120,17 +107,21 @@ public class AuthServiceImpl implements AuthService {
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
                 .build();
-
         sessionRepository.save(session);
 
         log.info("Login success: user={} jti={}", user.getUsername(), jti);
 
         return LoginResponse.builder()
                 .token(token)
-                .username(user.getUsername())
-                .role(user.getRole().name())
-                .avatarInitials(user.getAvatarInitials())
                 .expiresAt(expiresAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
+                .user(LoginResponse.UserInfo.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .fullName(user.getFullName())
+                        .email(user.getEmail())
+                        .avatarInitials(user.getAvatarInitials())
+                        .role(user.getRole().name())
+                        .build())
                 .build();
     }
 
@@ -144,33 +135,25 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void changePassword(Long userId,String currentPassword, String newPassword) {
+    public void changePassword(Long userId, String currentPassword, String newPassword) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        if (!passwordEncoder.matches(
-                currentPassword, user.getPasswordHash())) {
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new RuntimeException("Current password is incorrect");
         }
 
-        // Revoke all active sessions
-        sessionRepository
-                .findByUserIdAndRevokedAtIsNull(userId)
-                .forEach(session -> {
-                    session.setRevokedAt(LocalDateTime.now());
-                    session.setRevokeReason("PASSWORD_CHANGE");
-                    sessionRepository.save(session);
-                });
+        sessionRepository.findByUserIdAndRevokedAtIsNull(userId).forEach(session -> {
+            session.setRevokedAt(LocalDateTime.now());
+            session.setRevokeReason("PASSWORD_CHANGE");
+            sessionRepository.save(session);
+        });
 
-        user.setPasswordHash(
-                passwordEncoder.encode(newPassword));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
     }
-
 
     @Override
     @Transactional
@@ -186,7 +169,6 @@ public class AuthServiceImpl implements AuthService {
         session.setRevokedAt(LocalDateTime.now(ZoneOffset.UTC));
         session.setRevokeReason("LOGOUT");
         session.setIsActive(false);
-
         sessionRepository.save(session);
 
         log.info("Logout success: jti={}", jti);
@@ -195,9 +177,9 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse refreshToken(User user, String ipAddress, String userAgent) {
-        String jti = UUID.randomUUID().toString();
-        Date issuedAt  = new Date();
-        Date expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
+        String jti       = UUID.randomUUID().toString();
+        Date   issuedAt  = new Date();
+        Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
 
         String token = Jwts.builder()
                 .subject(String.valueOf(user.getId()))
@@ -218,16 +200,20 @@ public class AuthServiceImpl implements AuthService {
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
                 .build();
-
         sessionRepository.save(session);
         log.info("Token refreshed: user={} newJti={}", user.getUsername(), jti);
 
         return LoginResponse.builder()
                 .token(token)
-                .username(user.getUsername())
-                .role(user.getRole().name())
-                .avatarInitials(user.getAvatarInitials())
                 .expiresAt(expiresAt.toInstant().atZone(ZoneId.of("UTC")).toLocalDateTime())
+                .user(LoginResponse.UserInfo.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .fullName(user.getFullName())
+                        .email(user.getEmail())
+                        .avatarInitials(user.getAvatarInitials())
+                        .role(user.getRole().name())
+                        .build())
                 .build();
     }
 
@@ -236,9 +222,7 @@ public class AuthServiceImpl implements AuthService {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b));
-            }
+            for (byte b : hash) hex.append(String.format("%02x", b));
             return hex.toString();
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);

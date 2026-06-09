@@ -5,5 +5,6 @@ public enum ConfigType {
     STRING,
     INTEGER,
     BOOLEAN,
-    JSON
+    JSON,
+    DECIMAL
 }

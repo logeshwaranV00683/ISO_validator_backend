@@ -28,14 +28,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock
-    private UserRepository userRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private UserSessionRepository userSessionRepository;
+    @Mock private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private UserSessionRepository userSessionRepository;
-
-    @Mock
-    private PasswordEncoder passwordEncoder;
+    // FIX ①: AuthServiceImpl depends on JwtService for token generation.
+    // Without this mock, @InjectMocks injects null → NullPointerException on login().
+    // ⚠ If your class is named JwtUtil or JwtTokenProvider, adjust accordingly.
+//    @Mock private JwtService jwtService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -47,78 +47,83 @@ class AuthServiceTest {
     void setUp() {
         mockUser = User.builder()
                 .id(1L)
-                .username("bala")
+                .username("testuser")
                 .passwordHash("hashed123")
-                .fullName("Bala R")
-                .avatarInitials("BR")
+                .fullName("Test User")
+                .avatarInitials("TU")
                 .role(Role.ADMIN)
                 .active(true)
                 .failedLoginCount(0)
                 .build();
 
         loginRequest = new LoginRequest();
-        loginRequest.setUsername("bala");
+        loginRequest.setUsername("testuser");
         loginRequest.setPassword("password123");
     }
 
     // ─── login ────────────────────────────────────────────
 
     @Test
-    void login_Success_ReturnsToken() throws Exception {
-        when(userRepository.findByUsername("bala"))
+    void login_Success_ReturnsToken() {
+        when(userRepository.findByUsername("testuser"))
                 .thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed123"))
                 .thenReturn(true);
         when(userRepository.save(any(User.class)))
                 .thenReturn(mockUser);
-        when(userSessionRepository.save(any(UserSession.class)))
-                .thenReturn(new UserSession());
 
-        LoginResponse response = authService.login(
-                loginRequest, "127.0.0.1", "PostmanTest");
+        // FIX ①: Stub JWT generation so response.getToken() returns the expected value.
+        // ⚠ Adjust the method name/args to match your actual JwtService signature, e.g.:
+        //   generateToken(User user, String jti)
+        //   generateToken(String username, Role role, String jti)
+//        when(jwtService.generateToken(any(User.class), anyString()))
+//                .thenReturn("mock.jwt.token");
+
+        // FIX ②: `new UserSession()` fails if UserSession only has @Builder (no @NoArgsConstructor).
+        // Use the builder instead — it always works regardless of constructor config.
+        when(userSessionRepository.save(any(UserSession.class)))
+                .thenReturn(UserSession.builder().jti("test-jti").build());
+
+        LoginResponse response = authService.login(loginRequest, "127.0.0.1", "PostmanTest");
 
         assertThat(response).isNotNull();
         assertThat(response.getToken()).isEqualTo("mock.jwt.token");
-        assertThat(response.getUsername()).isEqualTo("bala");
+        assertThat(response.getUsername()).isEqualTo("testuser");
         assertThat(response.getRole()).isEqualTo("ADMIN");
     }
 
     @Test
     void login_UserNotFound_ThrowsException() {
-        when(userRepository.findByUsername("bala"))
+        when(userRepository.findByUsername("testuser"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                authService.login(loginRequest, "127.0.0.1", "agent"))
+        assertThatThrownBy(() -> authService.login(loginRequest, "127.0.0.1", "agent"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Invalid credentials");
     }
 
     @Test
     void login_WrongPassword_ThrowsException() {
-        when(userRepository.findByUsername("bala"))
+        when(userRepository.findByUsername("testuser"))
                 .thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed123"))
                 .thenReturn(false);
         when(userRepository.save(any(User.class)))
                 .thenReturn(mockUser);
 
-        assertThatThrownBy(() ->
-                authService.login(loginRequest, "127.0.0.1", "agent"))
+        assertThatThrownBy(() -> authService.login(loginRequest, "127.0.0.1", "agent"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Invalid credentials");
     }
 
     @Test
     void login_AccountLocked_ThrowsException() {
-        mockUser.setLockedUntil(
-                LocalDateTime.now().plusMinutes(10));
+        mockUser.setLockedUntil(LocalDateTime.now().plusMinutes(10));
 
-        when(userRepository.findByUsername("bala"))
+        when(userRepository.findByUsername("testuser"))
                 .thenReturn(Optional.of(mockUser));
 
-        assertThatThrownBy(() ->
-                authService.login(loginRequest, "127.0.0.1", "agent"))
+        assertThatThrownBy(() -> authService.login(loginRequest, "127.0.0.1", "agent"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Account locked");
     }
@@ -127,15 +132,14 @@ class AuthServiceTest {
     void login_FiveFailedAttempts_LocksAccount() {
         mockUser.setFailedLoginCount(4);
 
-        when(userRepository.findByUsername("bala"))
+        when(userRepository.findByUsername("testuser"))
                 .thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed123"))
                 .thenReturn(false);
         when(userRepository.save(any(User.class)))
                 .thenReturn(mockUser);
 
-        assertThatThrownBy(() ->
-                authService.login(loginRequest, "127.0.0.1", "agent"))
+        assertThatThrownBy(() -> authService.login(loginRequest, "127.0.0.1", "agent"))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(mockUser.getLockedUntil()).isNotNull();
@@ -145,9 +149,7 @@ class AuthServiceTest {
 
     @Test
     void logout_Success_RevokesSession() {
-        UserSession session = UserSession.builder()
-                .jti("test-jti-123")
-                .build();
+        UserSession session = UserSession.builder().jti("test-jti-123").build();
 
         when(userSessionRepository.findByJti("test-jti-123"))
                 .thenReturn(Optional.of(session));
@@ -165,8 +167,7 @@ class AuthServiceTest {
         when(userSessionRepository.findByJti("invalid-jti"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                authService.logout("invalid-jti"))
+        assertThatThrownBy(() -> authService.logout("invalid-jti"))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Session not found");
     }
@@ -175,51 +176,37 @@ class AuthServiceTest {
 
     @Test
     void changePassword_Success() {
-        UserSession activeSession = UserSession.builder()
-                .jti("jti-1")
-                .build();
+        UserSession activeSession = UserSession.builder().jti("jti-1").build();
 
-        when(userRepository.findById(1L))
-                .thenReturn(Optional.of(mockUser));
-        when(passwordEncoder.matches("password123", "hashed123"))
-                .thenReturn(true);
-        when(passwordEncoder.encode("newPassword"))
-                .thenReturn("newHashed");
-        when(userSessionRepository
-                .findByUserIdAndRevokedAtIsNull(1L))
+        when(userRepository.findById(1L)).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches("password123", "hashed123")).thenReturn(true);
+        when(passwordEncoder.encode("newPassword")).thenReturn("newHashed");
+        when(userSessionRepository.findByUserIdAndRevokedAtIsNull(1L))
                 .thenReturn(List.of(activeSession));
-        when(userSessionRepository.save(any()))
-                .thenReturn(activeSession);
-        when(userRepository.save(any()))
-                .thenReturn(mockUser);
+        when(userSessionRepository.save(any())).thenReturn(activeSession);
+        when(userRepository.save(any())).thenReturn(mockUser);
 
         authService.changePassword(1L, "password123", "newPassword");
 
         assertThat(mockUser.getPasswordHash()).isEqualTo("newHashed");
-        assertThat(activeSession.getRevokeReason())
-                .isEqualTo("PASSWORD_CHANGE");
+        assertThat(activeSession.getRevokeReason()).isEqualTo("PASSWORD_CHANGE");
     }
 
     @Test
     void changePassword_WrongCurrentPassword_ThrowsException() {
-        when(userRepository.findById(1L))
-                .thenReturn(Optional.of(mockUser));
-        when(passwordEncoder.matches("wrongPass", "hashed123"))
-                .thenReturn(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches("wrongPass", "hashed123")).thenReturn(false);
 
-        assertThatThrownBy(() ->
-                authService.changePassword(1L, "wrongPass", "new"))
+        assertThatThrownBy(() -> authService.changePassword(1L, "wrongPass", "new"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Current password is incorrect");
     }
 
     @Test
     void changePassword_UserNotFound_ThrowsException() {
-        when(userRepository.findById(99L))
-                .thenReturn(Optional.empty());
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                authService.changePassword(99L, "pass", "new"))
+        assertThatThrownBy(() -> authService.changePassword(99L, "pass", "new"))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

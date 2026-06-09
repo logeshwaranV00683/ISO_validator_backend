@@ -94,4 +94,13 @@ public class FormatController {
     public ResponseEntity<ApiResponse<List<FormatDto>>> getVersions(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(formatService.getVersions(id), "Versions fetched"));
     }
+
+    @PutMapping("/{id}/rollback/{version}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<FormatDto>> rollback(
+            @PathVariable Long    id,
+            @PathVariable Integer version) {
+        return ResponseEntity.ok(ApiResponse.success(
+                formatService.rollbackToVersion(id, version), "Format rolled back to version " + version));
+    }
 }

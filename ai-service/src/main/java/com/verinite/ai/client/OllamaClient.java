@@ -1,5 +1,6 @@
 package com.verinite.ai.client;
 
+import com.verinite.ai.entity.OllamaConfig;
 import com.verinite.ai.repository.OllamaConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,7 +71,7 @@ public class OllamaClient {
     /** Returns the base endpoint stored in config (e.g. http://localhost:11434/api/generate). */
     public String getEndpoint() {
         return configRepo.findByConfigKey("ollama.endpoint")
-                .map(c -> c.getConfigValue())
+                .map(OllamaConfig::getConfigValue)
                 .orElse("http://localhost:11434/api/generate");
     }
 

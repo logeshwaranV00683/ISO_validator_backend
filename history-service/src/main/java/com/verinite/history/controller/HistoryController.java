@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 
 @RestController
-@RequestMapping("/history")          // FIX: was /api/v1/history — gateway routes /history/**
+@RequestMapping("/history")
 @RequiredArgsConstructor
 @Slf4j
 public class HistoryController {
@@ -24,21 +24,19 @@ public class HistoryController {
     private final HistoryService historyService;
     private final StatsService   statsService;
 
-    /**
-     * GET /history/runs
-     * Paginated list — all filters including dateFrom / dateTo (previously missing).
-     */
-    @GetMapping("/runs")
+    /** GET /history — was GET /history/runs — /runs subpath removed (F3) */
+    @GetMapping
     public ResponseEntity<ApiResponse<Page<HistorySummaryDTO>>> listRuns(
             @RequestParam(required = false) Long   profileId,
             @RequestParam(required = false) String mti,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long   userId,
             @RequestParam(required = false) String responseCode,
+            @RequestParam(required = false) String environment,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,   // FIX: was missing
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,     // FIX: was missing
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(defaultValue = "0")         int    page,
             @RequestParam(defaultValue = "20")        int    size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -46,48 +44,32 @@ public class HistoryController {
 
         Page<HistorySummaryDTO> result = historyService.listRuns(
                 profileId, mti, status, userId, responseCode,
-                dateFrom, dateTo,                               // FIX: now forwarded
-                page, size, sortBy, sortDir);
+                dateFrom, dateTo, page, size, sortBy, sortDir);
 
         return ResponseEntity.ok(ApiResponse.success(result, "Runs fetched"));
     }
 
-    /**
-     * GET /history/runs/{runReference}
-     * Full detail: parsed fields + errors + aiExplanation.
-     * Never expose run_id — only runReference crosses service boundaries.
-     */
-    @GetMapping("/runs/{runReference}")
+    /** GET /history/{runReference} — was GET /history/runs/{runReference} */
+    @GetMapping("/{runReference}")
     public ResponseEntity<ApiResponse<HistoryDetailDTO>> getByRunReference(
             @PathVariable String runReference) {
-
-        HistoryDetailDTO detail = historyService.getByRunReference(runReference);
-        return ResponseEntity.ok(ApiResponse.success(detail, "Run found"));
+        return ResponseEntity.ok(ApiResponse.success(
+                historyService.getByRunReference(runReference), "Run found"));
     }
 
-    /**
-     * DELETE /history/runs/{runReference}  — soft delete
-     */
-    @DeleteMapping("/runs/{runReference}")
+    /** DELETE /history/{runReference} — was DELETE /history/runs/{runReference} */
+    @DeleteMapping("/{runReference}")
     public ResponseEntity<ApiResponse<Void>> softDelete(
             @PathVariable String runReference) {
-
         historyService.softDelete(runReference);
         return ResponseEntity.ok(ApiResponse.success(null, "Run deleted"));
     }
 
-    /**
-     * GET /history/stats
-     */
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<StatsResponse>> getStats() {
         return ResponseEntity.ok(ApiResponse.success(statsService.getStats(), "Stats fetched"));
     }
 
-    /**
-     * GET /history/export?format=json|csv
-     * Downloads all (non-deleted) runs matching the same filters as /runs.
-     */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) Long   profileId,
@@ -96,10 +78,8 @@ public class HistoryController {
             @RequestParam(defaultValue = "json") String format) {
 
         String data = historyService.exportRuns(profileId, mti, status, format);
-        String mediaType = "csv".equalsIgnoreCase(format)
-                ? "text/csv"
-                : "application/json";
-        String filename = "validation-runs." + format.toLowerCase();
+        String mediaType = "csv".equalsIgnoreCase(format) ? "text/csv" : "application/json";
+        String filename  = "validation-runs." + format.toLowerCase();
 
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")

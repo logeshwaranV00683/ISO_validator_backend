@@ -82,7 +82,7 @@ public class RuleController {
     }
 
     // POST /rules/bulk — JSON array import in single transaction
-    @PostMapping("/bulk")
+    @PostMapping("/bulk-import")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BulkImportResult> bulkImport(
             @RequestBody @Valid BulkImportRulesRequest req) {

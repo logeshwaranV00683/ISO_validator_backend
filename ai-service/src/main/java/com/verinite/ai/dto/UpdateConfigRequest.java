@@ -6,9 +6,10 @@ import lombok.Data;
 @Data
 public class UpdateConfigRequest {
 
+    /** Used by PUT /ai/config (no-key path) — ignored by PUT /ai/config/{key} */
+    @NotBlank(message = "Config Key must not be blank")
+    private String key;
     @NotBlank(message = "Config value must not be blank")
     private String value;
-
-    /** Optional note about why the value was changed (stored in audit log). */
     private String changeNote;
 }
