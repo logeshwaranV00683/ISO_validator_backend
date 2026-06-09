@@ -88,8 +88,8 @@ class AuthServiceTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getToken()).isEqualTo("mock.jwt.token");
-        assertThat(response.getUsername()).isEqualTo("testuser");
-        assertThat(response.getRole()).isEqualTo("ADMIN");
+        assertThat(response.getUser().getUsername()).isEqualTo("testuser");
+        assertThat(response.getUser().getRole()).isEqualTo("ADMIN");
     }
 
     @Test
