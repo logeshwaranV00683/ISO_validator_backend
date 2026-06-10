@@ -52,8 +52,8 @@ public class ProfileController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteProfile(@PathVariable Long id) {
-        profileService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> deleteProfile(@PathVariable Long id,@RequestParam String username) {
+        profileService.delete(id,username);
         return ResponseEntity.ok(ApiResponse.success(null, "Profile deleted"));
     }
 
@@ -61,8 +61,8 @@ public class ProfileController {
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> setStatus(
-            @PathVariable Long id, @RequestParam boolean active) {
-        profileService.setActive(id, active);
+            @PathVariable Long id, @RequestParam boolean active,@RequestParam String username) {
+        profileService.setActive(id, active,username);
         return ResponseEntity.ok(ApiResponse.success(null,
                 active ? "Profile activated" : "Profile deactivated"));
     }
@@ -70,8 +70,8 @@ public class ProfileController {
     /** PATCH /profiles/{id}/default — sets this profile as the default */
     @PatchMapping("/{id}/default")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> setDefault(@PathVariable Long id) {
-        profileService.setDefault(id);
+    public ResponseEntity<ApiResponse<Void>> setDefault(@PathVariable Long id,@RequestParam String username) {
+        profileService.setDefault(id,username);
         return ResponseEntity.ok(ApiResponse.success(null, "Default profile set"));
     }
 
