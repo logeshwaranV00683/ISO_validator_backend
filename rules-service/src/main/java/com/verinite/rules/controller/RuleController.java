@@ -19,12 +19,11 @@ public class RuleController {
     private final RuleService        ruleService;
     private final RuleEventPublisher eventPublisher;
 
-    // GET /rules?profileId=1&mti=0200   → specific profile
-    // GET /rules?mti=0200               → all profiles (profileId optional)
+    // GET /rules?profileId=1&mti=0200
     @GetMapping
     public ResponseEntity<List<RuleDto>> getRules(
-            @RequestParam(required = false) Long   profileId,
-            @RequestParam                   String mti) {
+            @RequestParam Long   profileId,
+            @RequestParam String mti) {
         return ResponseEntity.ok(ruleService.getEffectiveRules(profileId, mti));
     }
 
@@ -75,10 +74,11 @@ public class RuleController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteRule(@PathVariable Long id) {
+        // Capture profileId + mti BEFORE soft-delete so we can publish the event
         var rule = ruleService.getById(id);
         ruleService.softDelete(id);
         eventPublisher.publishRuleDeleted(rule.getProfileId(), rule.getMti());
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();     // 204
     }
 
     // POST /rules/bulk — JSON array import in single transaction
@@ -86,6 +86,7 @@ public class RuleController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BulkImportResult> bulkImport(
             @RequestBody @Valid BulkImportRulesRequest req) {
+        // Cache invalidation is published inside bulkImport()
         return ResponseEntity.ok(ruleService.bulkImport(req));
     }
 
@@ -114,6 +115,6 @@ public class RuleController {
             @PathVariable Long   id,
             @PathVariable String value) {
         ruleService.removeAllowedValue(id, value);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();     // 204
     }
 }
