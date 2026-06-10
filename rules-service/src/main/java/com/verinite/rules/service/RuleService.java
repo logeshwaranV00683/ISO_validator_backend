@@ -48,7 +48,6 @@ public class RuleService {
 
         ValidationRule rule = buildEntityFromRequest(req);
 
-// Add allowed values to the entity before save — cascade handles insert
         if (req.getAllowedValues() != null) {
             for (String v : req.getAllowedValues()) {
                 RuleAllowedValue av = RuleAllowedValue.builder()
@@ -60,7 +59,7 @@ public class RuleService {
             }
         }
 
-        ValidationRule saved = ruleRepository.save(rule);  // cascade saves allowed values too
+        ValidationRule saved = ruleRepository.save(rule);
 
         publishAudit("CREATE", "RULE", saved.getId(),
                 buildEntityName(saved), null, toJson(saved));
@@ -70,9 +69,15 @@ public class RuleService {
 
     // ═══════════════════════════════════════════════════════════════════════
     // READ
+    // FIX: profileId optional — null means "All Profiles"
     // ═══════════════════════════════════════════════════════════════════════
 
     public List<RuleDto> getEffectiveRules(Long profileId, String mti) {
+        if (profileId == null) {
+            // All Profiles — return effective rules across all profiles for this MTI
+            return ruleRepository.findEffectiveRulesByMti(mti, LocalDate.now())
+                    .stream().map(this::toDto).collect(Collectors.toList());
+        }
         return ruleRepository.findEffectiveRules(profileId, mti, LocalDate.now())
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
@@ -121,7 +126,7 @@ public class RuleService {
         if (req.getEffectiveTo()   != null) rule.setEffectiveTo(req.getEffectiveTo());
         if (req.getDescription()   != null) rule.setDescription(req.getDescription());
 
-        rule.setUpdatedBy(UserContext.getUsername());   // String, not Long
+        rule.setUpdatedBy(UserContext.getUsername());
 
         ValidationRule saved = ruleRepository.save(rule);
 
@@ -153,7 +158,7 @@ public class RuleService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SOFT DELETE — set deleted_at, no is_deleted field
+    // SOFT DELETE
     // ═══════════════════════════════════════════════════════════════════════
 
     @Transactional
@@ -161,7 +166,7 @@ public class RuleService {
         ValidationRule rule   = findOrThrow(id);
         String         before = toJson(rule);
 
-        rule.setDeletedAt(LocalDateTime.now());   // deleted_at IS NOT NULL = deleted
+        rule.setDeletedAt(LocalDateTime.now());
         rule.setActive(false);
         rule.setUpdatedBy(UserContext.getUsername());
 
@@ -179,7 +184,6 @@ public class RuleService {
     public BulkImportResult bulkImport(BulkImportRulesRequest req) {
         int imported = 0, updated = 0;
 
-        // Fetch all existing non-deleted rules for this profile+mti
         List<ValidationRule> existing = ruleRepository.findAllNonDeleted(
                 req.getProfileId(), req.getMti());
 
@@ -191,14 +195,13 @@ public class RuleService {
                 ));
 
         if ("REPLACE".equalsIgnoreCase(req.getStrategy())) {
-            // Soft-delete rules NOT in the incoming list
             Set<String> incomingDeNumbers = req.getRules().stream()
                     .map(CreateRuleRequest::getDeNumber)
                     .collect(Collectors.toSet());
 
             for (ValidationRule r : existing) {
                 if (!incomingDeNumbers.contains(r.getDeNumber())) {
-                    r.setDeletedAt(LocalDateTime.now());  // soft-delete
+                    r.setDeletedAt(LocalDateTime.now());
                     r.setActive(false);
                     ruleRepository.save(r);
                 }
@@ -210,7 +213,6 @@ public class RuleService {
         for (int i = 0; i < req.getRules().size(); i++) {
             CreateRuleRequest ruleReq = req.getRules().get(i);
 
-            // Propagate parent fields
             ruleReq.setProfileId(req.getProfileId());
             ruleReq.setProfileName(req.getProfileName());
             ruleReq.setMti(req.getMti());
@@ -222,7 +224,6 @@ public class RuleService {
                 toSave.add(existingRule);
                 updated++;
             } else {
-                // Insert new
                 toSave.add(buildEntityFromRequest(ruleReq));
                 imported++;
             }
@@ -230,10 +231,8 @@ public class RuleService {
 
         ruleRepository.saveAll(toSave);
 
-        // One cache invalidation for the whole batch
         eventPublisher.publishRuleUpdated(req.getProfileId(), req.getMti());
 
-        // One audit event for the whole batch
         publishAudit("RULE_IMPORT", "RULE", null,
                 "Bulk import: " + imported + " inserted, " + updated + " updated — "
                         + "profileId=" + req.getProfileId() + " mti=" + req.getMti(),
@@ -284,7 +283,7 @@ public class RuleService {
         RuleAllowedValue av = RuleAllowedValue.builder()
                 .rule(rule)
                 .allowedValue(value)
-                .createdBy(UserContext.getUsername())   // String
+                .createdBy(UserContext.getUsername())
                 .build();
         allowedValueRepository.save(av);
 
@@ -340,7 +339,7 @@ public class RuleService {
                 .effectiveFrom(req.getEffectiveFrom())
                 .effectiveTo(req.getEffectiveTo())
                 .description(req.getDescription())
-                .createdBy(UserContext.getUsername())   // String username
+                .createdBy(UserContext.getUsername())
                 .build();
     }
 
@@ -360,24 +359,13 @@ public class RuleService {
         rule.setUpdatedBy(UserContext.getUsername());
     }
 
-    private void saveAllowedValues(ValidationRule rule, List<String> values) {
-        if (values == null || values.isEmpty()) return;
-        for (String v : values) {
-            allowedValueRepository.save(RuleAllowedValue.builder()
-                    .rule(rule)
-                    .allowedValue(v)
-                    .createdBy(UserContext.getUsername())
-                    .build());
-        }
-    }
-
     private void publishAudit(String action, String entityType,
                               Long entityId, String entityName,
                               String before, String after) {
         try {
             eventPublisher.publishAudit(AuditEvent.builder()
                     .payload(AuditEvent.Payload.builder()
-                            .userId(UserContext.getUserId())      // Long userId stays in audit
+                            .userId(UserContext.getUserId())
                             .username(UserContext.getUsername())
                             .userRole(UserContext.getRole())
                             .action(action)
@@ -435,7 +423,7 @@ public class RuleService {
                 .description(rule.getDescription())
                 .createdAt(rule.getCreatedAt())
                 .updatedAt(rule.getUpdatedAt())
-                .createdByName(rule.getCreatedBy())    // created_by stores username now
+                .createdByName(rule.getCreatedBy())
                 .updatedByName(rule.getUpdatedBy())
                 .allowedValues(values)
                 .build();

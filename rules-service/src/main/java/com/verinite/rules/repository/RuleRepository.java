@@ -52,4 +52,18 @@ public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
     boolean existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
             Long profileId, String mti, String deNumber
     );
+
+    @Query("""
+    SELECT r FROM ValidationRule r
+    WHERE r.mti       = :mti
+      AND r.active    = true
+      AND r.deletedAt IS NULL
+      AND (r.effectiveFrom IS NULL OR r.effectiveFrom <= :today)
+      AND (r.effectiveTo   IS NULL OR r.effectiveTo   >= :today)
+    ORDER BY r.priority ASC
+""")
+    List<ValidationRule> findEffectiveRulesByMti(
+            @Param("mti")   String mti,
+            @Param("today") LocalDate today
+    );
 }
