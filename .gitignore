@@ -40,3 +40,7 @@ api-gateway/src/main/resources/keys/private.pem
 ### Jar/War files ###
 *.jar
 *.war
+
+## Bash Runs ##
+.service-logs/
+.service-pids/
