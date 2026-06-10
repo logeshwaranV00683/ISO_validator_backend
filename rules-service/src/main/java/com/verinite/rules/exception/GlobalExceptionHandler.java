@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -54,19 +55,21 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Map<String, Object>> error(int status, String code,
                                                       String message, List<String> details) {
-        var body = Map.<String, Object>of(
-                "success", false,
-                "data",    null,
-                "error",   Map.of(
-                        "code",    code,
-                        "message", message != null ? message : "",
-                        "details", details != null ? details : List.of()
-                ),
-                "meta", Map.of(
-                        "timestamp", Instant.now().toString(),
-                        "service",   "rules-service"
-                )
-        );
+        Map<String, Object> errorMap = new LinkedHashMap<>();
+        errorMap.put("code",    code);
+        errorMap.put("message", message != null ? message : "");
+        errorMap.put("details", details != null ? details : List.of());
+
+        Map<String, Object> metaMap = new LinkedHashMap<>();
+        metaMap.put("timestamp", Instant.now().toString());
+        metaMap.put("service",   "rules-service");
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        body.put("data",    null);   // null is allowed in LinkedHashMap
+        body.put("error",   errorMap);
+        body.put("meta",    metaMap);
+
         return ResponseEntity.status(status).body(body);
     }
 }
