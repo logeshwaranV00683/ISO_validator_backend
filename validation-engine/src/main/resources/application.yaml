@@ -70,7 +70,7 @@ resilience4j:
       ai-cb:
         slidingWindowSize: 5
         failureRateThreshold: 60
-        waitDurationInOpenState: 30s
+        waitDurationInOpenState: 120s
         permittedNumberOfCallsInHalfOpenState: 2
   timelimiter:
     instances:
