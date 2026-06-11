@@ -75,7 +75,7 @@ resilience4j:
   timelimiter:
     instances:
       ai-cb:
-        timeoutDuration: 22s
+        timeoutDuration: 120s
       profile-cb:
         timeoutDuration: 5s
       rules-cb:
