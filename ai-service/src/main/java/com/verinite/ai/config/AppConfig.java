@@ -1,4 +1,4 @@
-package com.verinite.ai.conifg;
+package com.verinite.ai.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

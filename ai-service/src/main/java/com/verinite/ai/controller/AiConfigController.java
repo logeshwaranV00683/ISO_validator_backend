@@ -151,7 +151,7 @@ public class AiConfigController {
                 .id(c.getId())
                 .key(c.getConfigKey())             // F9: renamed
                 .value(Boolean.TRUE.equals(c.getIsSensitive()) ? "****" : c.getConfigValue())  // F9: renamed
-                .configType(c.getConfigType() != null ? c.getConfigType().name() : null)
+                .configType(c.getConfigType() != null ? c.getConfigType() : null)
                 .description(c.getDescription())
                 .isSensitive(c.getIsSensitive())
                 .updatedBy(c.getUpdatedBy())        // F9: added

@@ -4,17 +4,22 @@ import com.verinite.common.enums.AiRunStatus;
 import com.verinite.common.enums.TemplateScope;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "ai_run_logs")
-@Data @Builder @NoArgsConstructor @AllArgsConstructor
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AiRunLog {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "run_reference", nullable = false)
+    @Column(name = "run_reference", nullable = false, length = 30)
     private String runReference;
 
     @Column(name = "template_id")
@@ -27,10 +32,10 @@ public class AiRunLog {
     @Column(name = "profile_id")
     private Long profileId;
 
-    @Column(name = "ollama_endpoint")
+    @Column(name = "ollama_endpoint", length = 500)
     private String ollamaEndpoint;
 
-    @Column(name = "model_name")
+    @Column(name = "model_name", length = 100)
     private String modelName;
 
     @Column(name = "prompt_sent", columnDefinition = "LONGTEXT")
@@ -43,23 +48,23 @@ public class AiRunLog {
     private Integer httpStatusCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private AiRunStatus status;
 
     @Column(name = "duration_ms")
     private Long durationMs;
 
-    @Column(name = "retry_count", nullable = false)
     @Builder.Default
+    @Column(name = "retry_count", nullable = false)
     private Integer retryCount = 0;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(name = "correlation_id")
+    @Column(name = "correlation_id", length = 36)
     private String correlationId;
 
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
