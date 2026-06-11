@@ -21,7 +21,7 @@ public class ValidationRunError {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "run_id", nullable = false)
     @ToString.Exclude
-    private ValidationRun run;
+    private ValidationRun runid;
 
     @Column(name = "rule_id")
     private Long ruleId;
