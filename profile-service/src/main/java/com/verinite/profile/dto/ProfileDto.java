@@ -11,35 +11,36 @@ import java.time.LocalDateTime;
 @Builder
 public class ProfileDto {
 
-    // --- Identity ---
-    private Long id;
-    private String profileName;
-    private String description;
+    // ── Identity ──────────────────────────────────────────────────────
+    private Long        id;
+    private String      profileName;
+    private String      description;
     private Environment environment;
 
-    // --- Connection ---
-    private String host;
+    // ── Connection ────────────────────────────────────────────────────
+    private String  host;
     private Integer port;
-    private String timezone;
+    private String  timezone;
     private Integer connectionTimeoutMs;
 
-    // --- TPDU ---
+    // ── TPDU ──────────────────────────────────────────────────────────
     private Boolean tpduEnabled;
-    private String tpduValue;
+    private String  tpduValue;
 
-    // --- Flags ---
+    // ── Flags ─────────────────────────────────────────────────────────
     private Boolean active;
     private Boolean isDefault;
 
-    // --- Test tracking ---
-    private LocalDateTime lastTestedAt;
+    // ── Usage & test tracking ─────────────────────────────────────────
+    private LocalDateTime            lastUsedAt;        // was missing
+    private LocalDateTime            lastTestedAt;
     private SwitchProfile.TestResult lastTestResult;
-    private Integer lastTestLatencyMs;
-    private String lastTestMessage;
+    private Integer                  lastTestLatencyMs;
+    private String                   lastTestMessage;
 
-    // --- Audit ---
-    private String createdBy;
-    private String updatedBy;
+    // ── Audit ─────────────────────────────────────────────────────────
+    private String        createdBy;
+    private String        updatedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

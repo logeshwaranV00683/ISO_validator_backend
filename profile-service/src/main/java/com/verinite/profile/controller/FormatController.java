@@ -1,9 +1,7 @@
 package com.verinite.profile.controller;
 
 import com.verinite.common.dto.ApiResponse;
-import com.verinite.profile.dto.CreateFormatRequest;
-import com.verinite.profile.dto.FormatDto;
-import com.verinite.profile.dto.UpdateFormatRequest;
+import com.verinite.profile.dto.*;
 import com.verinite.profile.service.FormatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,15 +44,18 @@ public class FormatController {
             @PathVariable Long id,
             @RequestBody @Valid UpdateFormatRequest req,
             @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+        // FIX: now passes full request, not just xmlContent string
         return ResponseEntity.ok(ApiResponse.success(
-                formatService.update(id, req.getXmlContent(), username), "Format updated"));
+                formatService.update(id, req, username), "Format updated"));
     }
 
-    /** DELETE /formats/{id} — soft delete */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteFormat(@PathVariable Long id) {
-        formatService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> deleteFormat(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+        // FIX: now passes username for audit trail
+        formatService.delete(id, username);
         return ResponseEntity.ok(ApiResponse.success(null, "Format deleted"));
     }
 
@@ -62,13 +63,16 @@ public class FormatController {
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> setStatus(
-            @PathVariable Long id, @RequestParam boolean active) {
-        formatService.setActive(id, active);
+            @PathVariable Long id,
+            @RequestParam boolean active,
+            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+        // FIX: now passes username; service correctly toggles active/inactive
+        formatService.setActive(id, active, username);
         return ResponseEntity.ok(ApiResponse.success(null,
                 active ? "Format activated" : "Format deactivated"));
     }
 
-    /** POST /formats/validate-xml — dry-run jPOS validation, no DB write */
+    /** POST /formats/validate-xml — dry-run jPOS load, no DB write */
     @PostMapping("/validate-xml")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> validateXml(@RequestBody String xmlContent) {
@@ -84,23 +88,33 @@ public class FormatController {
         return ResponseEntity.ok(ApiResponse.success(null, "Reload signal sent"));
     }
 
+    /** PUT /formats/{id}/rollback — roll back to previous version */
     @PutMapping("/{id}/rollback")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<FormatDto>> rollback(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(formatService.rollback(id), "Format rolled back"));
+    public ResponseEntity<ApiResponse<FormatDto>> rollback(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+        return ResponseEntity.ok(ApiResponse.success(
+                formatService.rollback(id, username), "Format rolled back"));
     }
 
-    @GetMapping("/{id}/versions")
-    public ResponseEntity<ApiResponse<List<FormatDto>>> getVersions(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(formatService.getVersions(id), "Versions fetched"));
-    }
-
+    /** PUT /formats/{id}/rollback/{version} — roll back to a specific version */
     @PutMapping("/{id}/rollback/{version}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<FormatDto>> rollback(
+    public ResponseEntity<ApiResponse<FormatDto>> rollbackToVersion(
             @PathVariable Long    id,
-            @PathVariable Integer version) {
+            @PathVariable Integer version,
+            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
         return ResponseEntity.ok(ApiResponse.success(
-                formatService.rollbackToVersion(id, version), "Format rolled back to version " + version));
+                formatService.rollbackToVersion(id, version, username),
+                "Format rolled back to version " + version));
+    }
+
+    /** GET /formats/{id}/versions — version history (no XML, just metadata) */
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<ApiResponse<List<FormatVersionDto>>> getVersions(@PathVariable Long id) {
+        // FIX: now returns FormatVersionDto with checksum, changeNote, isCurrent, validatedOk
+        return ResponseEntity.ok(ApiResponse.success(
+                formatService.getVersions(id), "Versions fetched"));
     }
 }

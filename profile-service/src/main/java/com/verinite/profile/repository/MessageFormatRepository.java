@@ -14,7 +14,15 @@ public interface MessageFormatRepository extends JpaRepository<MessageFormat, Lo
 
     Optional<MessageFormat> findByIdAndDeletedAtIsNull(Long id);
 
-    Optional<MessageFormat> findByProfileIdAndDeletedAtIsNull(Long profileId);
-
     List<MessageFormat> findAllByDeletedAtIsNull();
+
+    boolean existsByProfileIdAndFormatNameAndDeletedAtIsNull(Long profileId, String formatName);
+
+    /**
+     * Used by InternalProfileController — fetches active (non-deleted, status=active)
+     * formats for a profile.  A profile may have multiple formats (different MTIs),
+     * so we return a List and let the caller pick.
+     */
+    List<MessageFormat> findAllByProfileIdAndStatusAndDeletedAtIsNull(
+            Long profileId, MessageFormat.Status status);
 }
