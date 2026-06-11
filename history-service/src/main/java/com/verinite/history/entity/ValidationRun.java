@@ -3,6 +3,7 @@ package com.verinite.history.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -69,6 +70,10 @@ public class ValidationRun {
     @Builder.Default
     private Integer totalFieldsPresent = 0;
 
+    @Column(name = "total_fields_Parsed", nullable = false)
+    @Builder.Default
+    private Integer totalFieldsParsed = 0;
+
     @Column(name = "total_errors", nullable = false)
     @Builder.Default
     private Integer totalErrors = 0;
@@ -106,6 +111,10 @@ public class ValidationRun {
     @Column(name = "pan_masked", length = 25)
     private String panMasked;
 
+    // ADDED: SHA-256 hash of raw_message for rerun dedup detection
+    @Column(name = "hex_message_hash", length = 64)
+    private String hexMessageHash;
+
     @Column(name = "parse_duration_ms")
     private Integer parseDurationMs;
 
@@ -132,6 +141,10 @@ public class ValidationRun {
     @Builder.Default
     private Boolean isRerun = false;
 
+    // ADDED: FK to the original run row (bigint), was missing — only string ref existed
+    @Column(name = "original_run_id")
+    private Long originalRunId;
+
     @Column(name = "original_run_reference", length = 30)
     private String originalRunReference;
 
@@ -147,6 +160,11 @@ public class ValidationRun {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    // ADDED: auto-managed updated_at timestamp
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

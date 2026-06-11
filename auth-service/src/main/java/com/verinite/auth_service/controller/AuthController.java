@@ -110,7 +110,7 @@ public class AuthController {
         String jti    = claims.getId();
 
         authService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
-        authService.logout(jti);
+      //  authService.logout(jti);
 
         auditPublisher.publish(
                 "PASSWORD_CHANGE", "USER", userId, (String) claims.get("username"),

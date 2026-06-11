@@ -68,6 +68,7 @@ public class AiTemplateService {
      * PUT /ai/templates/{id}
      * Bumps currentVersion, marks the old version row as not-current,
      * inserts a NEW version row as current, updates the template content.
+     * Only updates fields that are provided (non-null) in the request.
      */
     @Transactional
     public AiPromptTemplate update(Long id, AiPromptTemplate updated, String updatedBy) {
@@ -80,25 +81,25 @@ public class AiTemplateService {
             versionRepo.save(v);
         });
 
-        // Insert new version row
+        // Insert new version row — use existing content if updated content is null
         versionRepo.save(AiPromptTemplateVersion.builder()
                 .templateId(id)
                 .versionNumber(newVersion)
-                .promptContent(updated.getPromptTemplate())
-                .changeNote(updated.getVariablesUsed() != null
-                        ? "Updated to v" + newVersion
-                        : "Updated to v" + newVersion)
+                .promptContent(updated.getPromptTemplate() != null
+                        ? updated.getPromptTemplate()
+                        : existing.getPromptTemplate())
+                .changeNote("Updated to v" + newVersion)
                 .isCurrent(true)
                 .createdBy(updatedBy)
                 .build());
 
-        // Update the main template row
-        existing.setTemplateName(updated.getTemplateName());
-        existing.setScope(updated.getScope());
-        existing.setProfileId(updated.getProfileId());
-        existing.setProfileName(updated.getProfileName());
-        existing.setPromptTemplate(updated.getPromptTemplate());
-        existing.setVariablesUsed(updated.getVariablesUsed());
+        // Update the main template row — only update fields that are provided
+        if (updated.getTemplateName() != null) existing.setTemplateName(updated.getTemplateName());
+        if (updated.getScope() != null) existing.setScope(updated.getScope());
+        if (updated.getProfileId() != null) existing.setProfileId(updated.getProfileId());
+        if (updated.getProfileName() != null) existing.setProfileName(updated.getProfileName());
+        if (updated.getPromptTemplate() != null) existing.setPromptTemplate(updated.getPromptTemplate());
+        if (updated.getVariablesUsed() != null) existing.setVariablesUsed(updated.getVariablesUsed());
         existing.setActive(updated.getActive() != null ? updated.getActive() : existing.getActive());
         existing.setCurrentVersion(newVersion);
         existing.setUpdatedBy(updatedBy);
@@ -180,7 +181,6 @@ public class AiTemplateService {
     /**
      * Scope resolution: PROFILE-scope template → use it.
      * If no PROFILE override exists → fall back to the GLOBAL template.
-     * This is called by OllamaService for every AI explanation request.
      */
     public AiPromptTemplate resolveTemplate(Long profileId, String mti) {
         // Try PROFILE-scope first
