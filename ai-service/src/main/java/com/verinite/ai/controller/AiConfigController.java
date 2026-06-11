@@ -122,8 +122,19 @@ public class AiConfigController {
             @RequestBody Map<String, Object> body) {
         try {
             String mti = (String) body.getOrDefault("mti", "0200");
-            String result = ollamaClient.callOllama(
-                    "This is a test. Respond with: 'AI service is working correctly for " + mti + "'");
+            String sampleErrors = (String) body.getOrDefault("sampleErrors", "DE7 missing");
+            Integer profileId = (Integer) body.getOrDefault("profileId", 1);
+
+            String prompt = "You are an ISO 8583 payment message expert.\n" +
+                    "A validation was run on MTI " + mti + " for profile ID " + profileId + ".\n" +
+                    "The following errors were found:\n" + sampleErrors + "\n\n" +
+                    "For each error, explain:\n" +
+                    "1. What the field is\n" +
+                    "2. Why it is mandatory\n" +
+                    "3. How to fix it";
+
+            String result = ollamaClient.callOllama(prompt);
+
             return ResponseEntity.ok(ApiResponse.success(
                     Map.of("result", result != null ? result : "No response",
                             "model", ollamaClient.getModelName(),
