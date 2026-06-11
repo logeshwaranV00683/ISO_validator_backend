@@ -52,25 +52,25 @@ docker exec iso-validator-redis redis-cli ping
 ```
 
 # 5. Ollama:
-
-Ollama accepts connections from other containers and services on the Docker network
-
-Pull a model:
-
+   Ollama accepts connections from other containers and services on the Docker network.
+```
+ Pull a model:
 The container starts empty. You must download a model:
 
-```
 docker exec -it iso-ollama ollama pull mistral
-
 or
-
 docker exec -it iso-ollama ollama pull llama3.2
 
-```
-
 The model files are stored in your ollama_data volume, so they persist across restarts.
+```
+Model keep-alive behaviour:
+- First request after container start → model loads into memory (~2-3 min cold start)
+- Subsequent requests within 1 hour  → instant (model stays in memory)
+- No requests for 1 hour             → model unloads from memory (saves RAM)
+- Container stops                    → model unloads immediately
+- Container restarts                 → model weights still on disk (volume), just needs to reload into memory
 
 Verify:
-
-curl http://localhost:11434/api/tags   You should see your downloaded models.
+curl http://localhost:11434/api/tags
+You should see your downloaded models.
 

@@ -45,7 +45,7 @@ feign:
     config:
       ai-service:
         connectTimeout: 3000
-        readTimeout: 22000
+        readTimeout: 220000
       profile-service:
         connectTimeout: 3000
         readTimeout: 5000
