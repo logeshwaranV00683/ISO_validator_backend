@@ -60,6 +60,12 @@ The container starts empty. You must download a model:
 docker exec -it iso-ollama ollama pull mistral
 or
 docker exec -it iso-ollama ollama pull llama3.2
+or
+docker exec -it iso-ollama ollama pull qwen3:8b
+or
+docker exec -it iso-ollama ollama pull phi4-mini
+or
+docker exec -it iso-ollama ollama pull deepseek-r1:8b
 
 The model files are stored in your ollama_data volume, so they persist across restarts.
 ```
