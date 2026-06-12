@@ -60,8 +60,8 @@ public class HistoryService {
         ValidationRun run = runRepository.findByRunReference(runReference)
                 .orElseThrow(() -> new NotFoundException("Run not found: " + runReference));
 
-        List<ValidationRunField> fields = fieldRepository.findByRunId(run.getId());
-        List<ValidationRunError> errors = errorRepository.findByRunId(run.getId());
+        List<ValidationRunField> fields = fieldRepository.findByRunId_Id(run.getId());
+        List<ValidationRunError> errors = errorRepository.findByRunId_Id(run.getId());
 
         return toDetail(run, fields, errors);
     }

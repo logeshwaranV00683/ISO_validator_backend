@@ -1,6 +1,7 @@
 package com.verinite.history.dto.response;
 
-import com.verinite.history.entity.ValidationRun.RunStatus;
+
+import com.verinite.common.enums.RunStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

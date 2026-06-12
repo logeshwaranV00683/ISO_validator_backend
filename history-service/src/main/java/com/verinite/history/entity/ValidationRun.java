@@ -8,6 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.verinite.common.enums.RunStatus;
 
 @Entity
 @Table(name = "validation_runs")
@@ -166,15 +167,11 @@ public class ValidationRun {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "runId", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ValidationRunField> fields = new ArrayList<>();
 
-    @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "runId", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ValidationRunError> errors = new ArrayList<>();
-
-    public enum RunStatus {
-        VALID, INVALID, WARNED, ERROR, PARSE_ERROR
-    }
 }

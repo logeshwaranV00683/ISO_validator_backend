@@ -9,7 +9,5 @@ import java.util.List;
 @Repository
 public interface ValidationRunFieldRepository extends JpaRepository<ValidationRunField, Long> {
 
-    List<ValidationRunField> findByRunId(Long runId);
-
-    List<ValidationRunField> findByRunIdAndIsPresent(Long runId, boolean isPresent);
+    List<ValidationRunField> findByRunId_Id(Long runId);
 }

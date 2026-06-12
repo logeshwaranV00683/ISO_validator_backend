@@ -1,5 +1,6 @@
 package com.verinite.history.entity;
 
+import com.verinite.common.enums.Severity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -21,7 +22,7 @@ public class ValidationRunError {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "run_id", nullable = false)
     @ToString.Exclude
-    private ValidationRun runid;
+    private ValidationRun runId;
 
     @Column(name = "rule_id")
     private Long ruleId;
@@ -60,8 +61,4 @@ public class ValidationRunError {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-
-    public enum Severity {
-        CRITICAL, WARNING, INFO
-    }
 }

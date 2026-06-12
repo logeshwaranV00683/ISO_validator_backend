@@ -1,5 +1,6 @@
 package com.verinite.history.service;
 
+import com.verinite.common.enums.RunStatus;
 import com.verinite.history.dto.response.StatsResponse;
 import com.verinite.history.entity.ValidationRun;
 import com.verinite.history.repository.ValidationRunRepository;
@@ -24,10 +25,10 @@ public class StatsService {
         long totalRuns = all.size();
 
         // FIX Bug 3: was "PASSED"/"FAILED" — correct enum values are VALID/INVALID
-        long passed = all.stream().filter(r -> r.getStatus() == ValidationRun.RunStatus.VALID).count();
-        long failed = all.stream().filter(r -> r.getStatus() == ValidationRun.RunStatus.INVALID).count();
-        long warned = all.stream().filter(r -> r.getStatus() == ValidationRun.RunStatus.WARNED).count();
-        long parseErrors = all.stream().filter(r -> r.getStatus() == ValidationRun.RunStatus.PARSE_ERROR).count();
+        long passed = all.stream().filter(r -> r.getStatus() == RunStatus.PASSED).count();
+        long failed = all.stream().filter(r -> r.getStatus() == RunStatus.FAILED).count();
+        long warned = all.stream().filter(r -> r.getStatus() == RunStatus.WARNED).count();
+        long parseErrors = all.stream().filter(r -> r.getStatus() == RunStatus.PARSE_ERROR).count();
 
         double passRate = totalRuns > 0
                 ? Math.round((passed * 1000.0 / totalRuns)) / 10.0

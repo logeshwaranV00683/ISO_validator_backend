@@ -1,5 +1,6 @@
 package com.verinite.history.messaging;
 
+import com.verinite.common.enums.RunStatus;
 import com.verinite.history.entity.ValidationRun;
 import com.verinite.history.entity.ValidationRunError;
 import com.verinite.history.entity.ValidationRunField;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import com.verinite.common.enums.Severity;
 
 import java.util.List;
 import java.util.Map;
@@ -89,7 +91,7 @@ public class ValidationRunConsumer {
             if (parsedFields != null) {
                 for (Map<String, Object> f : parsedFields) {
                     ValidationRunField field = ValidationRunField.builder()
-                            .run(run)
+                            .runId(run)
                             .deNumber((String) f.get("deNumber"))
                             .fieldName((String) f.get("fieldName"))
                             .rawValue((String) f.get("rawValue"))
@@ -109,7 +111,7 @@ public class ValidationRunConsumer {
             if (errors != null) {
                 for (Map<String, Object> e : errors) {
                     ValidationRunError error = ValidationRunError.builder()
-                            .run(run)
+                            .runId(run)
                             .ruleId(toLong(e.get("ruleId")))
                             .deNumber((String) e.get("deNumber"))
                             .fieldName((String) e.get("fieldName"))
@@ -162,16 +164,16 @@ public class ValidationRunConsumer {
         return Boolean.parseBoolean(val.toString());
     }
 
-    private ValidationRun.RunStatus parseStatus(String val) {
-        if (val == null) return ValidationRun.RunStatus.ERROR;
-        try { return ValidationRun.RunStatus.valueOf(val); }
-        catch (Exception e) { return ValidationRun.RunStatus.ERROR; }
+    private RunStatus parseStatus(String val) {
+        if (val == null) return RunStatus.PARSE_ERROR;
+        try { return RunStatus.valueOf(val); }
+        catch (Exception e) { return RunStatus.PARSE_ERROR; }
     }
 
-    private ValidationRunError.Severity parseSeverity(String val) {
-        if (val == null) return ValidationRunError.Severity.INFO;
-        try { return ValidationRunError.Severity.valueOf(val); }
-        catch (Exception e) { return ValidationRunError.Severity.INFO; }
+    private Severity parseSeverity(String val) {
+        if (val == null) return Severity.INFO;
+        try { return Severity.valueOf(val); }
+        catch (Exception e) { return Severity.INFO; }
     }
 
     private ValidationRunField.EncodingType parseEncodingType(String val) {

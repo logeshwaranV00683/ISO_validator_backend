@@ -1,7 +1,7 @@
 package com.verinite.history.dto.response;
 
-import com.verinite.history.entity.ValidationRun.RunStatus;
-import com.verinite.history.entity.ValidationRunError.Severity;
+import com.verinite.common.enums.Severity;
+import com.verinite.common.enums.RunStatus;
 import com.verinite.history.entity.ValidationRunField.EncodingType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -21,7 +21,7 @@ public class ValidationRunField {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "run_id", nullable = false)
     @ToString.Exclude
-    private ValidationRun runid;
+    private ValidationRun runId;
 
     @Column(name = "de_number", nullable = false, length = 10)
     private String deNumber;

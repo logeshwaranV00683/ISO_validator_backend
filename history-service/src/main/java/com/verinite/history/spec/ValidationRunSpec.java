@@ -1,5 +1,6 @@
 package com.verinite.history.spec;
 
+import com.verinite.common.enums.RunStatus;
 import com.verinite.history.entity.ValidationRun;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -29,7 +30,7 @@ public class ValidationRunSpec {
                 predicates.add(cb.equal(root.get("userId"), userId));
             if (status != null && !status.isBlank())
                 predicates.add(cb.equal(root.get("status"),
-                        ValidationRun.RunStatus.valueOf(status.toUpperCase())));
+                        RunStatus.valueOf(status.toUpperCase())));
             if (mti != null && !mti.isBlank())
                 predicates.add(cb.equal(root.get("mti"), mti));
             if (dateFrom != null)
