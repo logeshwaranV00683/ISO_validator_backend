@@ -1,5 +1,6 @@
 package com.verinite.history.messaging;
 
+import com.verinite.common.enums.EncodingType;
 import com.verinite.common.enums.RunStatus;
 import com.verinite.history.entity.ValidationRun;
 import com.verinite.history.entity.ValidationRunError;
@@ -176,9 +177,9 @@ public class ValidationRunConsumer {
         catch (Exception e) { return Severity.INFO; }
     }
 
-    private ValidationRunField.EncodingType parseEncodingType(String val) {
+    private EncodingType parseEncodingType(String val) {
         if (val == null) return null;
-        try { return ValidationRunField.EncodingType.valueOf(val); }
+        try { return EncodingType.valueOf(val); }
         catch (Exception e) { return null; }
     }
 }
