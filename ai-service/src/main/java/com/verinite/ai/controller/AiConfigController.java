@@ -30,8 +30,6 @@ public class AiConfigController {
     private final OllamaClient           ollamaClient;
     private final OllamaConfigRepository configRepository;
     private final AiAuditEventPublisher  auditPublisher;
-    private final OllamaService          ollamaService;
-    private final AiTemplateService      templateService;
 
     @GetMapping("/ai/health")
     public ResponseEntity<ApiResponse<AiHealthDto>> health() {
@@ -61,13 +59,9 @@ public class AiConfigController {
      */
     @PutMapping("/ai/config")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<OllamaConfigDto>> updateConfigBulk(
+    public ResponseEntity<ApiResponse<OllamaConfigDto>> updateConfig(
             @RequestBody @Valid UpdateConfigRequest req,
             Authentication auth) {
-
-        if (req.getKey() == null || req.getKey().isBlank()) {
-            throw new IllegalArgumentException("Config key must not be blank");
-        }
 
         String username = auth != null ? auth.getName() : "system";
         OllamaConfig config = configRepository.findByConfigKey(req.getKey())
@@ -77,25 +71,6 @@ public class AiConfigController {
         config.setUpdatedBy(username);
         configRepository.save(config);
         auditPublisher.publishConfigChange(req.getKey(), oldValue, req.getValue(), username);
-        return ResponseEntity.ok(ApiResponse.success(toDto(config), "Config updated"));
-    }
-
-    /** PUT /ai/config/{key} — kept for backward compatibility */
-    @PutMapping("/ai/config/{key}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<OllamaConfigDto>> updateConfig(
-            @PathVariable String key,
-            @RequestBody @Valid UpdateConfigRequest req,
-            Authentication auth) {
-
-        String username = auth != null ? auth.getName() : "system";
-        OllamaConfig config = configRepository.findByConfigKey(key)
-                .orElseThrow(() -> new NotFoundException("Config key not found: " + key));
-        String oldValue = config.getConfigValue();
-        config.setConfigValue(req.getValue());
-        config.setUpdatedBy(username);
-        configRepository.save(config);
-        auditPublisher.publishConfigChange(key, oldValue, req.getValue(), username);
         return ResponseEntity.ok(ApiResponse.success(toDto(config), "Config updated"));
     }
 

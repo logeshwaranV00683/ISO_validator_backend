@@ -75,7 +75,7 @@ services:
       - |
         ollama serve &
         sleep 15
-        ollama pull qwen3:8b
+        ollama pull phi3:mini
         wait
     healthcheck:
       test: ["CMD", "ollama", "list"]
