@@ -8,6 +8,7 @@ import org.jpos.iso.ISOPackager;
 import org.jpos.iso.packager.GenericPackager;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,12 +16,13 @@ import java.util.Map;
 public class IsoParserUtil {
 
     /**
-     * Parse using a pre-loaded ISOPackager (used in production — packager is cached).
+     * Parse a message — accepts BOTH hex-encoded strings and raw ASCII/binary strings.
+     * Auto-detects format via {@link #toBytes(String)}.
      */
-    public static ParsedMessage parse(String hexMessage, ISOPackager packager)
+    public static ParsedMessage parse(String message, ISOPackager packager)
             throws ISOException {
         try {
-            byte[] bytes = hexToBytes(hexMessage);
+            byte[] bytes = toBytes(message);          // ← was hexToBytes(); now auto-detects
             ISOMsg msg   = new ISOMsg();
             msg.setPackager(packager);
             msg.unpack(bytes);
@@ -41,9 +43,9 @@ public class IsoParserUtil {
     }
 
     /**
-     * Parse using a classpath resource path (used in unit tests).
+     * Parse using a classpath resource path (unit tests).
      */
-    public static ParsedMessage parse(String hexMessage, String packagerPath)
+    public static ParsedMessage parse(String message, String packagerPath)
             throws ISOException {
         try {
             InputStream is = IsoParserUtil.class
@@ -52,7 +54,7 @@ public class IsoParserUtil {
             if (is == null) {
                 throw new ISOException("Packager file not found: " + packagerPath);
             }
-            return parse(hexMessage, new GenericPackager(is));
+            return parse(message, new GenericPackager(is));
         } catch (ISOException e) {
             throw e;
         } catch (Exception e) {
@@ -60,7 +62,7 @@ public class IsoParserUtil {
         }
     }
 
-    /** Build a jPOS ISOMsg for a given packager and DE fields (used by MessageBuilderService). */
+    /** Build a jPOS ISOMsg (used by MessageBuilderService). */
     public static ISOMsg buildMsg(String mti,
                                   Map<Integer, String> fields,
                                   ISOPackager packager) throws ISOException {
@@ -73,7 +75,47 @@ public class IsoParserUtil {
         return msg;
     }
 
-    /** Convert hex string to byte array. */
+    /**
+     * Smart byte converter — auto-detects input format:
+     * <ul>
+     *   <li>All chars are valid hex digits (0-9, a-f, A-F) AND even length
+     *       → hex-encoded binary → {@link #hexToBytes(String)}</li>
+     *   <li>Otherwise → raw wire-format message string → ISO-8859-1 bytes</li>
+     * </ul>
+     *
+     * Edge case handled: a raw ISO 8583 ASCII message that happens to look like
+     * hex (e.g., "0200B220...") will contain non-hex chars (B, spaces, etc.)
+     * and fall through to the raw path correctly.
+     */
+    public static byte[] toBytes(String message) {
+        if (message == null) throw new IllegalArgumentException("Message cannot be null");
+        String clean = message.replaceAll("\\s+", "");
+        if (isHexEncoded(clean)) {
+            log.debug("Input detected as hex-encoded ({} chars → {} bytes)",
+                    clean.length(), clean.length() / 2);
+            return hexToBytes(clean);
+        }
+        log.debug("Input detected as raw message string ({} chars)", clean.length());
+        return clean.getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    /**
+     * Returns true only when every character is a hex digit AND length is even.
+     * Empty / null / odd-length strings → false.
+     */
+    private static boolean isHexEncoded(String s) {
+        if (s == null || s.isEmpty() || s.length() % 2 != 0) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean hex = (c >= '0' && c <= '9')
+                    || (c >= 'a' && c <= 'f')
+                    || (c >= 'A' && c <= 'F');
+            if (!hex) return false;
+        }
+        return true;
+    }
+
+    /** Convert a pre-cleaned hex string to bytes. */
     public static byte[] hexToBytes(String hex) {
         String clean = hex.replaceAll("\\s+", "");
         int    len   = clean.length();

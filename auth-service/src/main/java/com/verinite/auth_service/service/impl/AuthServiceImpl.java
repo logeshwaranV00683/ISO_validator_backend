@@ -41,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
     private final LoginAttemptService loginAttemptService;
     private final SystemConfigService systemConfigService;
 
-    @Value("${jwt.expiry-minutes:60}")
+    @Value("${jwt.expiry-minutes}")
     private int expiryMinutes;
 
     @Override
