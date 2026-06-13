@@ -19,6 +19,7 @@ import org.jpos.iso.ISOMsg;
 import org.jpos.iso.ISOPackager;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -356,11 +357,28 @@ public class ValidationServiceImpl implements ValidationService {
         }
 
         try {
-            ISOMsg msg   = IsoParserUtil.buildMsg(request.getMti(), validatedFields, packager);
-            byte[] packed = msg.pack();
-            String hexMsg = bytesToHex(packed);
+            ISOMsg msg    = IsoParserUtil.buildMsg(request.getMti(), validatedFields, packager);
+            byte[] packed  = msg.pack();
 
-            // Build field breakdown
+            // ── Output format ──────────────────────────────────────────────────────
+            boolean asciiMode = "ASCII".equalsIgnoreCase(request.getOutputFormat());
+            String  rawMsg    = asciiMode
+                    ? new String(packed, StandardCharsets.ISO_8859_1)
+                    : bytesToHex(packed);
+
+            // ── bitmapHex — computed from fields directly, format-independent ──────
+            long primaryBits = 0L;
+            boolean hasExtended = validatedFields.keySet().stream()
+                    .anyMatch(de -> de >= 65 && de <= 128);
+            if (hasExtended) primaryBits |= (1L << 63);          // bit-1 = secondary present
+            for (int de : validatedFields.keySet()) {
+                if (de >= 2 && de <= 64) {
+                    primaryBits |= (1L << (64 - de));
+                }
+            }
+            String bitmapHex = String.format("%016X", primaryBits);
+
+            // ── Field breakdown (unchanged) ────────────────────────────────────────
             List<BuildMessageResponse.FieldBreakdown> breakdown = validatedFields.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .map(e -> {
@@ -376,23 +394,24 @@ public class ValidationServiceImpl implements ValidationService {
                     })
                     .collect(Collectors.toList());
 
-            // Compute bitsSet from packed message
             List<Integer> bitsSet = new ArrayList<>(validatedFields.keySet());
             Collections.sort(bitsSet);
 
             return BuildMessageResponse.builder()
-                    .rawMessage(hexMsg)                              // F10g: renamed from hexMessage
+                    .rawMessage(rawMsg)
+                    .outputFormat(asciiMode ? "ASCII" : "HEX")      // ← echo back
                     .mti(request.getMti())
-                    .mtiDescription(getMtiDescription(request.getMti())) // F10g
+                    .mtiDescription(getMtiDescription(request.getMti()))
                     .profileId(request.getProfileId())
-                    .profile(profileFormat.getProfileName())         // F10g
-                    .bitmapHex(hexMsg.length() >= 16 ? hexMsg.substring(4, 20) : null) // F10g
-                    .bitsSet(bitsSet)                                // F10g
-                    .totalLength(packed.length)                      // F10g
-                    .fieldBreakdown(breakdown)                       // F10g
-                    .missingMandatory(missingMandatory)              // F10g
+                    .profile(profileFormat.getProfileName())
+                    .bitmapHex(bitmapHex)                           // ← always hex, format-independent
+                    .bitsSet(bitsSet)
+                    .totalLength(packed.length)
+                    .fieldBreakdown(breakdown)
+                    .missingMandatory(missingMandatory)
                     .validationWarnings(warnings)
                     .build();
+
         } catch (Exception e) {
             throw new RuntimeException("BUILD_FAILED: " + e.getMessage());
         }

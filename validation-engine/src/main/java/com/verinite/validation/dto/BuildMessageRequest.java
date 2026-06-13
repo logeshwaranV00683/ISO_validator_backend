@@ -1,7 +1,9 @@
 package com.verinite.validation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.util.Map;
@@ -14,6 +16,18 @@ public class BuildMessageRequest {
 
     @NotBlank(message = "mti is required")
     private String mti;
+
+    /**
+     * Output format for rawMessage in the response.
+     * "HEX"   → packed bytes as uppercase hex string (default)
+     * "ASCII" → packed bytes as raw ISO-8859-1 string (wire format)
+     */
+    @Pattern(
+            regexp = "^(HEX|ASCII)$",
+            message = "outputFormat must be either HEX or ASCII"
+    )
+    @Schema(description = "Output format: HEX (default) or ASCII")
+    private String outputFormat = "HEX";
 
     /**
      * Map of DE number (integer) → value string.

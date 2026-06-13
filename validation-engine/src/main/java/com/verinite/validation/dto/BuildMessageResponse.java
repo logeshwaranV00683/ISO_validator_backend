@@ -1,5 +1,6 @@
 package com.verinite.validation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
 
@@ -19,6 +20,8 @@ public class BuildMessageResponse {
     private List<FieldBreakdown> fieldBreakdown; // per-field detail (F10g)
     private List<String> missingMandatory;     // mandatory DEs not provided (F10g)
     private List<String> validationWarnings;
+    @Schema(description = "Actual output format used: HEX or ASCII")
+    private String outputFormat;
 
     @Data
     @Builder
