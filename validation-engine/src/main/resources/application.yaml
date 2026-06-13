@@ -52,6 +52,9 @@ feign:
       rules-service:
         connectTimeout: 3000
         readTimeout: 5000
+      history-service:
+        connectTimeout: 3000
+        readTimeout: 5000
 
 # ── Resilience4j ──────────────────────────────────────────────────────────────
 resilience4j:
