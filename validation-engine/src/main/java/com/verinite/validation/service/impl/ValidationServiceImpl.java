@@ -1,5 +1,7 @@
 package com.verinite.validation.service.impl;
 
+import com.verinite.common.dto.ApiResponse;
+import com.verinite.common.dto.HistoryDetailDTO;
 import com.verinite.common.util.PanMaskingUtil;
 import com.verinite.validation.client.AIServiceClient;
 import com.verinite.validation.client.HistoryServiceClient;
@@ -450,39 +452,57 @@ public class ValidationServiceImpl implements ValidationService {
     }
 
     @Override
-    public ValidationResponse rerun(String runReference, String userId, String correlationId) {
-        Object raw = historyClient.getRunDetail(runReference);
+    public ValidationResponse rerun(String runReference,
+                                    String userId,
+                                    String correlationId) {
 
-        if (!(raw instanceof Map<?, ?> map)) {
-            throw new RuntimeException("Could not fetch original run: " + runReference);
+        try {
+
+            ApiResponse<HistoryDetailDTO> response =
+                    historyClient.getRunDetail(runReference);
+
+            if (response == null || response.getData() == null) {
+                throw new RuntimeException(
+                        "Run not found: " + runReference);
+            }
+
+            HistoryDetailDTO run = response.getData();
+
+            ValidationRequest rerunRequest =
+                    ValidationRequest.builder()
+                            .profileId(run.getProfileId())
+                            .rawMessage(run.getRawMessage())
+                            .enableAi(Boolean.TRUE.equals(run.getAiEnabled()))
+                            .isRerun(true)
+                            .originalRunReference(runReference)
+                            .build();
+
+            return validate(
+                    rerunRequest,
+                    userId,
+                    correlationId
+            );
+
+        } catch (feign.FeignException.NotFound ex) {
+
+            throw new RuntimeException(
+                    "Run not found: " + runReference);
+
+        } catch (Exception ex) {
+
+            log.error(
+                    "[{}] rerun failed for {}",
+                    correlationId,
+                    runReference,
+                    ex
+            );
+
+            throw new RuntimeException(
+                    "Failed to rerun validation: "
+                            + ex.getMessage(),
+                    ex
+            );
         }
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) map;
-
-        Object innerData = data.get("data");
-        if (innerData instanceof Map<?, ?> inner) {
-            //noinspection unchecked
-            data = (Map<String, Object>) inner;
-        }
-
-        Object profileIdObj  = data.get("profileId");
-        Object rawMessageObj = data.get("rawMessage");
-        Object aiEnabledObj  = data.get("aiEnabled");
-
-        if (profileIdObj == null || rawMessageObj == null) {
-            throw new RuntimeException("Original run data incomplete for rerun: " + runReference);
-        }
-
-        ValidationRequest rerunRequest = ValidationRequest.builder()
-                .profileId(Long.valueOf(profileIdObj.toString()))
-                .rawMessage(rawMessageObj.toString())
-                .enableAi(Boolean.TRUE.equals(aiEnabledObj))
-                .isRerun(true)
-                .originalRunReference(runReference)
-                .build();
-
-        return validate(rerunRequest, userId, correlationId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

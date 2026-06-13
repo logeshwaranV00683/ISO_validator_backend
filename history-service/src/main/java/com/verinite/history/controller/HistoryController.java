@@ -1,7 +1,7 @@
 package com.verinite.history.controller;
 
 import com.verinite.history.dto.response.ApiResponse;
-import com.verinite.history.dto.response.HistoryDetailDTO;
+import com.verinite.common.dto.HistoryDetailDTO;
 import com.verinite.history.dto.response.HistorySummaryDTO;
 import com.verinite.history.dto.response.StatsResponse;
 import com.verinite.history.service.HistoryService;

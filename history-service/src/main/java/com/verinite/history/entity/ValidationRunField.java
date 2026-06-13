@@ -1,5 +1,6 @@
 package com.verinite.history.entity;
 
+import com.verinite.common.enums.EncodingType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -53,7 +54,4 @@ public class ValidationRunField {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public enum EncodingType {
-        FIXED, LLVAR, LLLVAR, MTI, BITMAP
-    }
 }

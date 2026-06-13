@@ -1,8 +1,7 @@
-package com.verinite.history.dto.response;
+package com.verinite.common.dto;
 
-import com.verinite.common.enums.Severity;
+import com.verinite.common.enums.EncodingType;import com.verinite.common.enums.Severity;
 import com.verinite.common.enums.RunStatus;
-import com.verinite.history.entity.ValidationRunField.EncodingType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

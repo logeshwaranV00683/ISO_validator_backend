@@ -1,6 +1,7 @@
 package com.verinite.validation.controller;
 
 import com.verinite.common.dto.ApiResponse;
+import com.verinite.common.dto.HistoryDetailDTO;
 import com.verinite.validation.client.HistoryServiceClient;
 import com.verinite.validation.dto.*;
 import com.verinite.validation.service.ValidationService;
@@ -35,11 +36,9 @@ public class ValidationController {
     @PostMapping("/build")
     public ResponseEntity<ApiResponse<BuildMessageResponse>> build(
             @RequestBody @Valid BuildMessageRequest request,
-            @RequestHeader(value = "X-Auth-User-Id",   required = false) String userId,
-            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {  // FIX: added
+            @RequestHeader(value = "X-Auth-User-Id", required = false) String userId) {
 
-        log.info("Build message profileId={} mti={} correlationId={}",
-                request.getProfileId(), request.getMti(), correlationId);   // FIX: log correlationId
+        log.info("Build message profileId={} mti={}", request.getProfileId(), request.getMti());
         BuildMessageResponse response = validationService.buildMessage(request, userId);
         return ResponseEntity.ok(ApiResponse.success(response, "Message built successfully"));
     }
@@ -52,8 +51,8 @@ public class ValidationController {
     public ResponseEntity<ApiResponse<Object>> getRunDetail(
             @PathVariable String runReference) {
         log.info("Fetching run detail runReference={}", runReference);
-        Object detail = historyClient.getRunDetail(runReference);
-        return ResponseEntity.ok(ApiResponse.success(detail, "Run found"));
+        ApiResponse<HistoryDetailDTO> detail = historyClient.getRunDetail(runReference);
+        return ResponseEntity.ok(ApiResponse.success(detail.getData(), "Run found"));
     }
 
     /**
