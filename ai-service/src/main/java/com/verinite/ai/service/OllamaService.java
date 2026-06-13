@@ -5,6 +5,7 @@ import com.verinite.ai.dto.AiExplainRequest;
 import com.verinite.ai.dto.TemplateContext;
 import com.verinite.ai.entity.AiPromptTemplate;
 import com.verinite.ai.entity.AiRunLog;
+import com.verinite.ai.entity.OllamaConfig;
 import com.verinite.ai.repository.OllamaConfigRepository;
 import com.verinite.common.enums.AiRunStatus;
 import com.verinite.common.enums.TemplateScope;
@@ -34,7 +35,7 @@ public class OllamaService {
         // ── 1. Global AI enabled check ──────────────────────────────────────
         boolean enabled = Boolean.parseBoolean(
                 ollamaConfigRepo.findByConfigKey("ollama.enabled")
-                        .map(c -> c.getConfigValue()).orElse("false"));
+                        .map(OllamaConfig::getConfigValue).orElse("false"));
         if (!enabled) {
             aiRunLogService.logSkip(runRef, "DISABLED", request.getProfileId(), null, null);
             return null;

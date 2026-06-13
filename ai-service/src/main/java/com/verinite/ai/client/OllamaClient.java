@@ -43,9 +43,9 @@ public class OllamaClient {
         // Respect temperature and max_tokens from DB config
         try {
             String temperature = configRepo.findByConfigKey("ollama.temperature")
-                    .map(c -> c.getConfigValue()).orElse("0.3");
-            String maxTokens = configRepo.findByConfigKey("ollama.max_tokens")
-                    .map(c -> c.getConfigValue()).orElse("1024");
+                    .map(OllamaConfig::getConfigValue).orElse("0.3");
+            String maxTokens = configRepo.findByConfigKey("ollama.max.tokens")
+                    .map(OllamaConfig::getConfigValue).orElse("1024");
             request.put("options", Map.of(
                     "temperature", Double.parseDouble(temperature),
                     "num_predict", Integer.parseInt(maxTokens)
@@ -77,13 +77,13 @@ public class OllamaClient {
 
     public String getModelName() {
         return configRepo.findByConfigKey("ollama.model")
-                .map(c -> c.getConfigValue())
+                .map(OllamaConfig::getConfigValue)
                 .orElse("unknown");
     }
 
     private String getConfig(String key) {
         return configRepo.findByConfigKey(key)
-                .map(c -> c.getConfigValue())
+                .map(OllamaConfig::getConfigValue)
                 .orElseThrow(() -> new RuntimeException("Ollama config not found: " + key));
     }
 }
