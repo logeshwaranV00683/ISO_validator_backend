@@ -220,7 +220,7 @@ public class ValidationServiceImpl implements ValidationService {
                 .isRerun(request.isRerun())
                 .originalRunReference(request.getOriginalRunReference())
                 .bitmapPrimary(bitmap.getPrimary())
-                .bitmapExtended(bitmap.getExtended())        // F10a: extended (was secondary)
+                .bitmapExtended(bitmap.getExtended())
                 .totalFieldsPresent(rawFields.size())
                 .totalFieldsParsed(parsedFieldDTOs.size())
                 .totalErrors(errors.size())
@@ -244,8 +244,8 @@ public class ValidationServiceImpl implements ValidationService {
                         .map(f -> ValidationRunEvent.ParsedFieldEvent.builder()
                                 .deNumber("DE" + f.getDeNumber())
                                 .fieldName(f.getFieldName())
-                                .rawValue(f.getRawValue())           // F10d: rawValue
-                                .displayValue(f.getDisplayValue())   // F10d: displayValue
+                                .rawValue(f.getRawValue())
+                                .displayValue(f.getDisplayValue())
                                 .isPresent(true)
                                 .fieldLength(f.getRawValue() != null ? f.getRawValue().length() : 0)
                                 .dePosition(f.getDeNumber())
@@ -258,7 +258,7 @@ public class ValidationServiceImpl implements ValidationService {
                                 .fieldName(e.getFieldName())
                                 .severity(e.getSeverity())
                                 .errorCode(e.getErrorCode())
-                                .errorMessage(e.getIssueDescription())   // F10e: issueDescription
+                                .errorMessage(e.getIssueDescription())
                                 .aiExplanation(e.getAiExplanation())
                                 .build())
                         .collect(Collectors.toList()))
@@ -271,7 +271,7 @@ public class ValidationServiceImpl implements ValidationService {
         TimingDTO timing = TimingDTO.builder()
                 .parseDurationMs(parseDurationMs)
                 .validationDurationMs(validationDurationMs)
-                .aiDurationMs(aiDurationMs)                         // F10b
+                .aiDurationMs(aiDurationMs)
                 .totalDurationMs(totalDurationMs)
                 .build();
 
@@ -279,12 +279,12 @@ public class ValidationServiceImpl implements ValidationService {
                 .runReference(runRef)
                 .status(status)
                 .profileId(request.getProfileId())
-                .profile(profileFormat.getProfileName())             // F10f
+                .profile(profileFormat.getProfileName())
                 .mti(mti)
-                .mtiDescription(getMtiDescription(mti))              // F10f
+                .mtiDescription(getMtiDescription(mti))
                 .parsedFields(parsedFieldDTOs)
                 .errors(errors)
-                .summary(ValidationResponse.Summary.builder()        // F10f
+                .summary(ValidationResponse.Summary.builder()
                         .criticalCount((int) criticalCount)
                         .warningCount((int) warningCount)
                         .infoCount((int) infoCount)
@@ -343,12 +343,18 @@ public class ValidationServiceImpl implements ValidationService {
             }
         }
 
-        // Check for missing mandatory fields
+        // ── Check for missing mandatory fields ────────────────────────────────
         for (Map.Entry<String, FieldDefinitionDto> entry : defByDeNum.entrySet()) {
             FieldDefinitionDto fd = entry.getValue();
             if (Boolean.TRUE.equals(fd.getIsMandatory())) {
                 try {
                     int de = Integer.parseInt(entry.getKey());
+
+                    // FIX: DE1 is the Secondary Bitmap — it is ALWAYS auto-generated
+                    // by jPOS when fields 65-128 are present. It is never a user-supplied
+                    // field and must never be flagged as missing here.
+                    if (de == 1) continue;
+
                     if (!validatedFields.containsKey(de)) {
                         missingMandatory.add("DE" + de + " (" + fd.getFieldName() + ") is mandatory");
                     }
@@ -366,19 +372,45 @@ public class ValidationServiceImpl implements ValidationService {
                     ? new String(packed, StandardCharsets.ISO_8859_1)
                     : bytesToHex(packed);
 
-            // ── bitmapHex — computed from fields directly, format-independent ──────
-            long primaryBits = 0L;
+// ── bitmapHex — production-safe primary + secondary bitmap ──────────────
             boolean hasExtended = validatedFields.keySet().stream()
                     .anyMatch(de -> de >= 65 && de <= 128);
-            if (hasExtended) primaryBits |= (1L << 63);          // bit-1 = secondary present
-            for (int de : validatedFields.keySet()) {
-                if (de >= 2 && de <= 64) {
+
+            long primaryBits = 0L;
+
+            if (hasExtended) {
+                // Bit 1 indicates secondary bitmap exists
+                primaryBits |= (1L << 63);
+            }
+
+            for (int de = 2; de <= 64; de++) {
+                if (validatedFields.containsKey(de)) {
                     primaryBits |= (1L << (64 - de));
                 }
             }
-            String bitmapHex = String.format("%016X", primaryBits);
 
-            // ── Field breakdown (unchanged) ────────────────────────────────────────
+            String primaryBitmap = String.format("%016X", primaryBits);
+
+            String bitmapHex;
+
+            if (hasExtended) {
+                long secondaryBits = 0L;
+
+                for (int de = 65; de <= 128; de++) {
+                    if (validatedFields.containsKey(de)) {
+                        secondaryBits |= (1L << (128 - de));
+                    }
+                }
+
+                String secondaryBitmap = String.format("%016X", secondaryBits);
+
+                // Full 128-bit bitmap (32 hex chars)
+                bitmapHex = primaryBitmap + secondaryBitmap;
+            } else {
+                bitmapHex = primaryBitmap;
+            }
+
+            // ── Field breakdown ────────────────────────────────────────────────────
             List<BuildMessageResponse.FieldBreakdown> breakdown = validatedFields.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .map(e -> {
@@ -399,12 +431,12 @@ public class ValidationServiceImpl implements ValidationService {
 
             return BuildMessageResponse.builder()
                     .rawMessage(rawMsg)
-                    .outputFormat(asciiMode ? "ASCII" : "HEX")      // ← echo back
+                    .outputFormat(asciiMode ? "ASCII" : "HEX")
                     .mti(request.getMti())
                     .mtiDescription(getMtiDescription(request.getMti()))
                     .profileId(request.getProfileId())
                     .profile(profileFormat.getProfileName())
-                    .bitmapHex(bitmapHex)                           // ← always hex, format-independent
+                    .bitmapHex(bitmapHex)
                     .bitsSet(bitsSet)
                     .totalLength(packed.length)
                     .fieldBreakdown(breakdown)
@@ -478,7 +510,7 @@ public class ValidationServiceImpl implements ValidationService {
                             .fieldName(e.getFieldName())
                             .severity(e.getSeverity())
                             .errorCode(e.getErrorCode())
-                            .errorMessage(e.getIssueDescription())   // F10e: issueDescription
+                            .errorMessage(e.getIssueDescription())
                             .build())
                     .collect(Collectors.toList());
 
@@ -524,9 +556,9 @@ public class ValidationServiceImpl implements ValidationService {
                     return ParsedFieldDTO.builder()
                             .deNumber(de)
                             .fieldName(deFieldNames.getOrDefault(de, "DE" + de))
-                            .rawValue(maskedValue)                   // F10d: rawValue
-                            .displayValue(maskedValue)               // F10d: displayValue (same as rawValue for most DEs)
-                            .isPresent(true)                         // F10d: isPresent
+                            .rawValue(maskedValue)
+                            .displayValue(maskedValue)
+                            .isPresent(true)
                             .masked(isMasked)
                             .build();
                 })
@@ -548,7 +580,7 @@ public class ValidationServiceImpl implements ValidationService {
         }
         String primary = String.format("%016X", primaryBits);
 
-        String  extended     = null;
+        String extended = null;
         if (hasExtended) {
             long secondaryBits = 0L;
             for (int de = 65; de <= 128; de++) {
@@ -563,8 +595,8 @@ public class ValidationServiceImpl implements ValidationService {
 
         return BitmapDTO.builder()
                 .primary(primary)
-                .extended(extended)     // F10a: renamed from secondary
-                .bitsSet(bitsSet)       // F10a: new field
+                .extended(extended)
+                .bitsSet(bitsSet)
                 .build();
     }
 

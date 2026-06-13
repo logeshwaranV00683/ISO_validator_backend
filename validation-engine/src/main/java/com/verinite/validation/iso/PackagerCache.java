@@ -46,10 +46,7 @@ public class PackagerCache {
 
         try (InputStream is = new ByteArrayInputStream(xmlBytes)) {
             GenericPackager packager = new GenericPackager(is);
-            int maxField = packager.getFieldPackager(0).getLength()-1;
-
-            log.info("PackagerCache loaded formatId={} maxField={}",
-                    formatId, maxField);
+            log.info("PackagerCache loaded formatId={}", formatId);
             return packager;
 
         } catch (Exception e) {

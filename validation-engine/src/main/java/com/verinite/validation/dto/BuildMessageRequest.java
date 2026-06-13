@@ -23,7 +23,7 @@ public class BuildMessageRequest {
      * "ASCII" → packed bytes as raw ISO-8859-1 string (wire format)
      */
     @Pattern(
-            regexp = "^(HEX|ASCII)$",
+            regexp = "^(?i)(HEX|ASCII)$",
             message = "outputFormat must be either HEX or ASCII"
     )
     @Schema(description = "Output format: HEX (default) or ASCII")

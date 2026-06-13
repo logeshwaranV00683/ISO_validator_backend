@@ -35,9 +35,11 @@ public class ValidationController {
     @PostMapping("/build")
     public ResponseEntity<ApiResponse<BuildMessageResponse>> build(
             @RequestBody @Valid BuildMessageRequest request,
-            @RequestHeader(value = "X-Auth-User-Id", required = false) String userId) {
+            @RequestHeader(value = "X-Auth-User-Id",   required = false) String userId,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {  // FIX: added
 
-        log.info("Build message profileId={} mti={}", request.getProfileId(), request.getMti());
+        log.info("Build message profileId={} mti={} correlationId={}",
+                request.getProfileId(), request.getMti(), correlationId);   // FIX: log correlationId
         BuildMessageResponse response = validationService.buildMessage(request, userId);
         return ResponseEntity.ok(ApiResponse.success(response, "Message built successfully"));
     }
