@@ -21,10 +21,16 @@ public class RuleController {
 
     // GET /rules?profileId=1&mti=0200
     @GetMapping
-    public ResponseEntity<List<RuleDto>> getRules(
+    public ResponseEntity<List<RuleDto>> getEffectiveRules(
             @RequestParam Long   profileId,
             @RequestParam String mti) {
         return ResponseEntity.ok(ruleService.getEffectiveRules(profileId, mti));
+    }
+    @GetMapping("/all")
+    public ResponseEntity<List<RuleDto>> getAllRules(
+            @RequestParam Long   profileId,
+            @RequestParam String mti) {
+        return ResponseEntity.ok(ruleService.getAllRules(profileId, mti));  // changed from getEffectiveRules
     }
 
     // GET /rules/{id}

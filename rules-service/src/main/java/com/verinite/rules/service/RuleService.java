@@ -303,6 +303,11 @@ public class RuleService {
                 null, null);
     }
 
+    public List<RuleDto> getAllRules(Long profileId, String mti) {
+        return ruleRepository.findAllNonDeleted(profileId, mti)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // PRIVATE HELPERS
     // ═══════════════════════════════════════════════════════════════════════
