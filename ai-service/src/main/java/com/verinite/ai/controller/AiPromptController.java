@@ -68,6 +68,10 @@ public class AiPromptController {
         String username = auth != null ? auth.getName() : "system";
         body.setScope(TemplateScope.PROFILE);
         body.setProfileId(profileId);
+        // Ensure templateName is set for new inserts (NOT NULL constraint)
+        if (body.getTemplateName() == null || body.getTemplateName().isBlank()) {
+            body.setTemplateName("profile-" + profileId);
+        }
         return templateService.getByScope(TemplateScope.PROFILE).stream()
                 .filter(t -> profileId.equals(t.getProfileId()))
                 .findFirst()
