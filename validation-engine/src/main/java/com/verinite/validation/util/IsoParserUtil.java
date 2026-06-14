@@ -86,17 +86,33 @@ public class IsoParserUtil {
      * Edge case handled: a raw ISO 8583 ASCII message that happens to look like
      * hex (e.g., "0200B220...") will contain non-hex chars (B, spaces, etc.)
      * and fall through to the raw path correctly.
+     *
+     * FIX: previously did `message.replaceAll("\\s+", "")` on the WHOLE input
+     * before branching. That strips internal spaces too — and raw ISO 8583
+     * messages legitimately contain space-padding inside fixed-length fields
+     * (DE43 "TEST MERCHANT/CHENNAI       IN          ", DE94 "654321 ", DE98
+     * "VERINITESETTLE001        ", DE95). Deleting those bytes shifts every
+     * field after them, which is what produced
+     * "IFA_LLNUM: ... Expected digit ... unpacking field=100".
+     * Now: only leading/trailing whitespace is trimmed for the raw path.
+     * Whitespace is only fully collapsed when deciding/performing hex
+     * decoding, where it's just a separator between byte-pairs and carries
+     * no data of its own.
      */
     public static byte[] toBytes(String message) {
         if (message == null) throw new IllegalArgumentException("Message cannot be null");
-        String clean = message.replaceAll("\\s+", "");
-        if (isHexEncoded(clean)) {
+
+        String trimmed = message.strip();
+
+        String hexCandidate = trimmed.replaceAll("\\s+", "");
+        if (isHexEncoded(hexCandidate)) {
             log.debug("Input detected as hex-encoded ({} chars → {} bytes)",
-                    clean.length(), clean.length() / 2);
-            return hexToBytes(clean);
+                    hexCandidate.length(), hexCandidate.length() / 2);
+            return hexToBytes(hexCandidate);
         }
-        log.debug("Input detected as raw message string ({} chars)", clean.length());
-        return clean.getBytes(StandardCharsets.ISO_8859_1);
+
+        log.debug("Input detected as raw message string ({} chars)", trimmed.length());
+        return trimmed.getBytes(StandardCharsets.ISO_8859_1);
     }
 
     /**
