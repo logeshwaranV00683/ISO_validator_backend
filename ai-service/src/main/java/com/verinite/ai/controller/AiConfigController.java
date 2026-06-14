@@ -4,12 +4,7 @@ import com.verinite.ai.client.OllamaClient;
 import com.verinite.ai.dto.AiHealthDto;
 import com.verinite.ai.dto.OllamaConfigDto;
 import com.verinite.ai.dto.UpdateConfigRequest;
-import com.verinite.ai.entity.OllamaConfig;
-import com.verinite.ai.event.AiAuditEventPublisher;
-import com.verinite.ai.exception.NotFoundException;
-import com.verinite.ai.repository.OllamaConfigRepository;
-import com.verinite.ai.service.AiTemplateService;
-import com.verinite.ai.service.OllamaService;
+import com.verinite.ai.service.OllamaConfigService;
 import com.verinite.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,9 +22,8 @@ import java.util.Map;
 @Slf4j
 public class AiConfigController {
 
-    private final OllamaClient           ollamaClient;
-    private final OllamaConfigRepository configRepository;
-    private final AiAuditEventPublisher  auditPublisher;
+    private final OllamaClient        ollamaClient;
+    private final OllamaConfigService configService;
 
     @GetMapping("/ai/health")
     public ResponseEntity<ApiResponse<AiHealthDto>> health() {
@@ -48,14 +42,12 @@ public class AiConfigController {
 
     @GetMapping("/ai/config")
     public ResponseEntity<ApiResponse<List<OllamaConfigDto>>> getConfig() {
-        List<OllamaConfigDto> dtos = configRepository.findAll().stream()
-                .map(this::toDto).toList();
-        return ResponseEntity.ok(ApiResponse.success(dtos, "OK"));
+        return ResponseEntity.ok(ApiResponse.success(configService.getAllConfig(), "OK"));
     }
 
     /**
-     * PUT /ai/config — FE sends full config object with { key, value } (F8-additional / new issue)
-     * No key in path — key is inside the request body.
+     * PUT /ai/config — FE sends single { key, value } object.
+     * No-op if value is unchanged (handled in service).
      */
     @PutMapping("/ai/config")
     @PreAuthorize("hasRole('ADMIN')")
@@ -64,22 +56,30 @@ public class AiConfigController {
             Authentication auth) {
 
         String username = auth != null ? auth.getName() : "system";
-        OllamaConfig config = configRepository.findByConfigKey(req.getKey())
-                .orElseThrow(() -> new NotFoundException("Config key not found: " + req.getKey()));
-        String oldValue = config.getConfigValue();
-        config.setConfigValue(req.getValue());
-        config.setUpdatedBy(username);
-        configRepository.save(config);
-        auditPublisher.publishConfigChange(req.getKey(), oldValue, req.getValue(), username);
-        return ResponseEntity.ok(ApiResponse.success(toDto(config), "Config updated"));
+        OllamaConfigDto updated = configService.updateConfig(req, username);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Config updated"));
+    }
+
+    /**
+     * PUT /ai/config/bulk — FE sends an array of { key, value } objects.
+     * Each entry that is unchanged from its current value is skipped (no save, no audit).
+     */
+    @PutMapping("/ai/config/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<OllamaConfigDto>>> updateConfigBulk(
+            @RequestBody @Valid List<UpdateConfigRequest> requests,
+            Authentication auth) {
+
+        String username = auth != null ? auth.getName() : "system";
+        List<OllamaConfigDto> updated = configService.updateConfigBulk(requests, username);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Config updated"));
     }
 
     @GetMapping("/ai/models")
     @SuppressWarnings("unchecked")
     public ResponseEntity<ApiResponse<Object>> listModels() {
         try {
-            String endpoint = ollamaClient.getEndpoint();
-            String base = endpoint.replace("/api/generate", "");
+            String base = ollamaClient.getEndpoint();
             org.springframework.web.client.RestTemplate rt =
                     new org.springframework.web.client.RestTemplate();
             Map<String, Object> response = rt.getForObject(base + "/api/tags", Map.class);
@@ -119,18 +119,5 @@ public class AiConfigController {
             return ResponseEntity.ok(ApiResponse.success(
                     Map.of("error", e.getMessage(), "status", "FAILED"), "AI test failed"));
         }
-    }
-
-    private OllamaConfigDto toDto(OllamaConfig c) {
-        return OllamaConfigDto.builder()
-                .id(c.getId())
-                .key(c.getConfigKey())             // F9: renamed
-                .value(Boolean.TRUE.equals(c.getIsSensitive()) ? "****" : c.getConfigValue())  // F9: renamed
-                .configType(c.getConfigType() != null ? c.getConfigType() : null)
-                .description(c.getDescription())
-                .isSensitive(c.getIsSensitive())
-                .updatedBy(c.getUpdatedBy())        // F9: added
-                .updatedAt(c.getUpdatedAt())        // F9: added
-                .build();
     }
 }

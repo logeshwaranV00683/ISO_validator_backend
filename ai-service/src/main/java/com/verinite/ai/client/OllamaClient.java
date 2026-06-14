@@ -32,7 +32,7 @@ public class OllamaClient {
     @SuppressWarnings("unchecked")
     public String callOllama(String prompt) {
         // Config: http://localhost:11434/api/generate  ← full URL already
-        String endpoint = getConfig("ollama.endpoint");
+        String endpoint = getConfig("ollama.host")+"/api/generate";
         String model    = getConfig("ollama.model");
 
         Map<String, Object> request = new HashMap<>();
@@ -70,7 +70,7 @@ public class OllamaClient {
 
     /** Returns the base endpoint stored in config (e.g. http://localhost:11434/api/generate). */
     public String getEndpoint() {
-        return configRepo.findByConfigKey("ollama.endpoint")
+        return configRepo.findByConfigKey("ollama.host")
                 .map(OllamaConfig::getConfigValue)
                 .orElse("http://localhost:11434/api/generate");
     }
