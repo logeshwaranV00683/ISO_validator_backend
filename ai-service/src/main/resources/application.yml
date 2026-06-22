@@ -51,7 +51,7 @@ resilience4j:
       ollama-cb:
         slidingWindowSize: 5
         failureRateThreshold: 60
-        waitDurationInOpenState: 30s
+        waitDurationInOpenState: 130s
         permittedNumberOfCallsInHalfOpenState: 2
         slidingWindowType: COUNT_BASED
   timelimiter:
