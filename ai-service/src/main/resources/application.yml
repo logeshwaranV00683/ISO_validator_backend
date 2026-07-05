@@ -30,6 +30,11 @@ spring:
     username: guest
     password: guest
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
 eureka:
   client:
     service-url:
@@ -73,3 +78,19 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: method
   show-actuator: false
+
+# BRD AI Feature
+brd:
+  upload:
+    dir: ${BRD_UPLOAD_DIR:./brd-uploads}
+    max-file-size: 10MB
+
+feign:
+  client:
+    config:
+      profile-service:
+        connectTimeout: 3000
+        readTimeout: 10000
+      rules-service:
+        connectTimeout: 3000
+        readTimeout: 10000

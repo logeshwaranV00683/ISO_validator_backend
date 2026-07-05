@@ -198,6 +198,18 @@ public class AiTemplateService {
                 .orElseThrow(() -> new NotFoundException("No active GLOBAL prompt template found"));
     }
 
+    /**
+     * BRD AI Feature: resolves the single active BRD_PARSE prompt template.
+     * There is no PROFILE-scope override concept for BRD parsing — it's a
+     * global, document-agnostic extraction prompt.
+     */
+    public AiPromptTemplate resolveBrdTemplate() {
+        return templateRepo
+                .findFirstByScopeAndActiveTrueAndDeletedAtIsNull(TemplateScope.BRD_PARSE)
+                .orElseThrow(() -> new NotFoundException(
+                        "No active BRD_PARSE prompt template found. Seed the DB first."));
+    }
+
     // ── Variable substitution ───────────────────────────────────────────────
 
     /**

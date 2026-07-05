@@ -7,7 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -79,6 +81,31 @@ public class OllamaClient {
         return configRepo.findByConfigKey("ollama.model")
                 .map(OllamaConfig::getConfigValue)
                 .orElse("unknown");
+    }
+
+    /**
+     * POST to Ollama /api/embeddings and return the embedding vector.
+     * Used by the BRD ingestion pipeline and switch-suggestion feature.
+     * Never throws — returns an empty list on any failure so callers can
+     * degrade gracefully (BRD ingestion / suggestion must never hard-fail).
+     */
+    @SuppressWarnings("unchecked")
+    public List<Double> getEmbedding(String text) {
+        try {
+            String endpoint = getConfig("ollama.host") + "/api/embeddings";
+            String model    = getConfig("ollama.model");
+            Map<String, Object> request = Map.of("model", model, "prompt", text);
+
+            Map<String, Object> response = restTemplate.postForObject(endpoint, request, Map.class);
+            if (response == null || !response.containsKey("embedding")) {
+                log.warn("Ollama embeddings call returned no 'embedding' field");
+                return Collections.emptyList();
+            }
+            return (List<Double>) response.get("embedding");
+        } catch (Exception e) {
+            log.warn("Ollama getEmbedding failed: {}", e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private String getConfig(String key) {
