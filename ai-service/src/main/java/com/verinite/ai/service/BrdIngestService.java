@@ -11,6 +11,7 @@ import com.verinite.common.enums.BrdExtractStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -124,6 +125,8 @@ public class BrdIngestService {
         tika.setMaxStringLength(-1); // no truncation — BRDs can be long
         try (InputStream is = file.getInputStream()) {
             return tika.parseToString(is, new Metadata());
+        } catch (TikaException e) {
+            throw new RuntimeException(e);
         }
     }
 
