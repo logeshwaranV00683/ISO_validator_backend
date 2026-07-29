@@ -12,6 +12,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.verinite.rules.entity.ValidationRule;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -23,8 +24,8 @@ import java.util.stream.Collectors;
 public class FieldDefinitionService {
 
     private final FieldDefinitionRepository fieldDefinitionRepository;
-    private final RuleEventPublisher        eventPublisher;
-    private final ObjectMapper              objectMapper;
+    private final RuleEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     // ═══════════════════════════════════════════════════════════════════════
     // CREATE
@@ -43,16 +44,62 @@ public class FieldDefinitionService {
             );
         }
 
-        FieldDefinition fd    = buildEntityFromRequest(req);
+
+        FieldDefinition fd = buildEntityFromRequest(req);
         FieldDefinition saved = fieldDefinitionRepository.save(fd);
 
         publishAudit("CREATE", "FIELD_DEFINITION", saved.getId(),
-                buildEntityName(saved), null, toJson(saved));
+                buildEntityName(saved), null, toJson(saved),
+                "Field Definition created successfully");
 
         return toDto(saved);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+
+
+    @Transactional
+    public void createIfNotExists(ValidationRule rule) {
+
+        if (fieldDefinitionRepository.existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
+                rule.getProfileId(),
+                rule.getMti(),
+                rule.getDeNumber())) {
+            return;
+        }
+
+        FieldDefinition fd = FieldDefinition.builder()
+                .profileId(rule.getProfileId())
+                .profileName(rule.getProfileName())
+                .mti(rule.getMti())
+                .deNumber(rule.getDeNumber())
+                .fieldName(rule.getFieldName())
+                .dataType(rule.getDataType())
+                .maxLength(rule.getMaxLength())
+                .isMandatory(rule.getIsMandatory())
+                .isLlvar(false)
+                .isLllvar(false)
+                .placeholderValue(null)
+                .displayOrder(0)
+                .isBuilderVisible(true)
+                .active(true)
+                .description(rule.getDescription())
+                .createdBy(UserContext.getUsername())
+                .build();
+
+        FieldDefinition savedFd = fieldDefinitionRepository.save(fd);
+
+        publishAudit(
+                "CREATE",
+                "FIELD_DEFINITION",
+                savedFd.getId(),
+                buildEntityName(savedFd),
+                null,
+                toJson(savedFd),
+                "Auto-created from Rule " + rule.getId()
+        );
+    }
+
+        // ═══════════════════════════════════════════════════════════════════════
     // READ — visible fields only (public API)
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -104,7 +151,8 @@ public class FieldDefinitionService {
         FieldDefinition saved = fieldDefinitionRepository.save(fd);
 
         publishAudit("UPDATE", "FIELD_DEFINITION", saved.getId(),
-                buildEntityName(saved), before, toJson(saved));
+                buildEntityName(saved), before, toJson(saved),
+                "Field Definition updated successfully");
 
         return toDto(saved);
     }
@@ -125,7 +173,8 @@ public class FieldDefinitionService {
         fieldDefinitionRepository.save(fd);
 
         publishAudit("DELETE", "FIELD_DEFINITION", fd.getId(),
-                buildEntityName(fd), before, null);
+                buildEntityName(fd), before, null,
+                "Field Definition deleted successfully");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -182,7 +231,8 @@ public class FieldDefinitionService {
         publishAudit("RULE_IMPORT", "FIELD_DEFINITION", null,
                 "Bulk import: " + imported + " inserted, " + updated + " updated — "
                         + "profileId=" + req.getProfileId() + " mti=" + req.getMti(),
-                null, null);
+                null, null,
+                "Field Definition bulk import completed");
 
         return BulkImportResult.builder()
                 .imported(imported).updated(updated).skipped(0).errors(List.of())
@@ -246,7 +296,7 @@ public class FieldDefinitionService {
 
     private void publishAudit(String action, String entityType,
                               Long entityId, String entityName,
-                              String before, String after) {
+                              String before, String after,String description) {
         try {
             eventPublisher.publishAudit(AuditEvent.builder()
                     .payload(AuditEvent.Payload.builder()
@@ -259,6 +309,7 @@ public class FieldDefinitionService {
                             .entityName(entityName)
                             .beforeValue(before)
                             .afterValue(after)
+                            .description(description)
                             .correlationId(UserContext.getCorrelationId())
                             .build())
                     .build());

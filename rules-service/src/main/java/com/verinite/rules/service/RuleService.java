@@ -28,10 +28,12 @@ public class RuleService {
     private final RuleAllowedValueRepository allowedValueRepository;
     private final RuleEventPublisher         eventPublisher;
     private final ObjectMapper               objectMapper;
+    private final FieldDefinitionService fieldDefinitionService;
 
     // ═══════════════════════════════════════════════════════════════════════
     // CREATE
     // ═══════════════════════════════════════════════════════════════════════
+
 
     @Transactional
     public RuleDto create(CreateRuleRequest req) {
@@ -62,8 +64,16 @@ public class RuleService {
 
         ValidationRule saved = ruleRepository.save(rule);  // cascade saves allowed values too
 
+
+        fieldDefinitionService.createIfNotExists(saved);
+
+
+
+
+
         publishAudit("CREATE", "RULE", saved.getId(),
-                buildEntityName(saved), null, toJson(saved));
+                buildEntityName(saved), null, toJson(saved),
+                "Rule created successfully");
 
         return toDto(saved);
     }
@@ -126,7 +136,8 @@ public class RuleService {
         ValidationRule saved = ruleRepository.save(rule);
 
         publishAudit("UPDATE", "RULE", saved.getId(),
-                buildEntityName(saved), before, toJson(saved));
+                buildEntityName(saved), before, toJson(saved),
+                "Rule updated successfully");
 
         return toDto(saved);
     }
@@ -147,7 +158,8 @@ public class RuleService {
 
         publishAudit("UPDATE", "RULE", saved.getId(),
                 buildEntityName(saved) + " [status toggled → " + saved.getActive() + "]",
-                before, toJson(saved));
+                before, toJson(saved),
+                "Rule status updated successfully");
 
         return toDto(saved);
     }
@@ -168,7 +180,8 @@ public class RuleService {
         ruleRepository.save(rule);
 
         publishAudit("DELETE", "RULE", rule.getId(),
-                buildEntityName(rule), before, null);
+                buildEntityName(rule), before, null,
+                "Rule deleted successfully");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -237,7 +250,8 @@ public class RuleService {
         publishAudit("RULE_IMPORT", "RULE", null,
                 "Bulk import: " + imported + " inserted, " + updated + " updated — "
                         + "profileId=" + req.getProfileId() + " mti=" + req.getMti(),
-                null, null);
+                null, null,
+                "Rule bulk import completed");
 
         return BulkImportResult.builder()
                 .imported(imported).updated(updated).skipped(0).errors(List.of())
@@ -253,7 +267,8 @@ public class RuleService {
 
         publishAudit("RULE_EXPORT", "RULE", null,
                 "Export: " + rules.size() + " rules for profileId=" + profileId + " mti=" + mti,
-                null, null);
+                null, null,
+                "Rule export completed");
 
         return rules.stream().map(this::toDto).collect(Collectors.toList());
     }
@@ -290,7 +305,8 @@ public class RuleService {
 
         publishAudit("UPDATE", "RULE", ruleId,
                 buildEntityName(rule) + " [allowed value added: " + value + "]",
-                null, null);
+                null, null,
+                "Allowed value added successfully");
     }
 
     @Transactional
@@ -300,7 +316,8 @@ public class RuleService {
 
         publishAudit("UPDATE", "RULE", ruleId,
                 buildEntityName(rule) + " [allowed value removed: " + value + "]",
-                null, null);
+                null, null,
+                "Allowed value removed successfully");
     }
 
     public List<RuleDto> getAllRules(Long profileId, String mti) {
@@ -376,9 +393,13 @@ public class RuleService {
         }
     }
 
-    private void publishAudit(String action, String entityType,
-                              Long entityId, String entityName,
-                              String before, String after) {
+    private void publishAudit(String action,
+                              String entityType,
+                              Long entityId,
+                              String entityName,
+                              String before,
+                              String after,
+                              String description) {
         try {
             eventPublisher.publishAudit(AuditEvent.builder()
                     .payload(AuditEvent.Payload.builder()
@@ -391,6 +412,7 @@ public class RuleService {
                             .entityName(entityName)
                             .beforeValue(before)
                             .afterValue(after)
+                            .description(description)
                             .correlationId(UserContext.getCorrelationId())
                             .build())
                     .build());

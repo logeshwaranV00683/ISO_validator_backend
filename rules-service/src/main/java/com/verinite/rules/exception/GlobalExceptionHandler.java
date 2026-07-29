@@ -3,10 +3,12 @@ package com.verinite.rules.exception;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -46,13 +48,47 @@ public class GlobalExceptionHandler {
     }
 
     // FIX: was returning ex.getMessage() in 500 response — internal details must not leak
+//    @ExceptionHandler(Exception.class)
+//    public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
+//        log.error("Unhandled exception in rules-service", ex);   // full trace in log only
+//        return error(500, "INTERNAL_ERROR",
+//                "An internal server error occurred. Please contact support.", null);
+//    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        log.error("Unhandled exception in rules-service", ex);   // full trace in log only
+        ex.printStackTrace();   // Temporary for debugging
+        log.error("Unhandled exception in rules-service", ex);
+
         return error(500, "INTERNAL_ERROR",
-                "An internal server error occurred. Please contact support.", null);
+                ex.getClass().getName() + " : " + ex.getMessage(),
+                null);
     }
 
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex) {
+
+        return error(
+                400,
+                "BAD_REQUEST",
+                "Invalid value for '" + ex.getName() + "': " + ex.getValue(),
+                null
+        );
+    }
+
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParameter(
+            MissingServletRequestParameterException ex) {
+
+        return error(
+                400,
+                "BAD_REQUEST",
+                ex.getParameterName() + " is required",
+                null
+        );
+    }
     private ResponseEntity<Map<String, Object>> error(int status, String code,
                                                       String message, List<String> details) {
         Map<String, Object> errorMap = new LinkedHashMap<>();
