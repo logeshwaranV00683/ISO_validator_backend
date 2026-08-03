@@ -55,7 +55,7 @@ public class BrdConfirmService {
                         ? config.getSwitchProfile().getEnvironment() : "DEV")
                 .host("localhost")
                 .port(9100)
-                .timezone("UTC")
+                .timezone("Etc/UTC")
                 .connectionTimeoutMs(30000)
                 .tpduEnabled(false)
                 .isActive(true)
