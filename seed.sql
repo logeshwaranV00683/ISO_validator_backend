@@ -47,7 +47,7 @@ INSERT INTO ollama_config (config_key, config_value, config_type, description, i
 ('ollama.host',        'http://localhost:11434/api/generate',  'STRING',  'Ollama API base URL',                                       FALSE, 'SYSTEM'),
 ('ollama.model',           'mistral:7b',              'STRING',  'Default model for explanations',                            FALSE, 'SYSTEM'),
 ('ollama.timeout.ms',      '20000',                   'INTEGER', 'HTTP request timeout in milliseconds',                      FALSE, 'SYSTEM'),
-('ollama.max.tokens',      '500',                     'INTEGER', 'Max tokens in Ollama response',                             FALSE, 'SYSTEM'),
+('ollama.max.tokens',      '10000',                     'INTEGER', 'Max tokens in Ollama response',                             FALSE, 'SYSTEM'),
 ('ollama.temperature',     '0.3',                     'DECIMAL', 'Model temperature (0.0=deterministic, 1.0=creative)',       FALSE, 'SYSTEM'),
 ('ollama.retry.count',     '2',                       'INTEGER', 'Number of retries on connection failure before fallback',   FALSE, 'SYSTEM'),
 ('ollama.fallback',        'SKIP_AI',                 'STRING',  'SKIP_AI = return result without AI; RETURN_ERROR = fail',   FALSE, 'SYSTEM'),

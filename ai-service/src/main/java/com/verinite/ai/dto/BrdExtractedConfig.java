@@ -1,5 +1,6 @@
 package com.verinite.ai.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,6 +19,8 @@ public class BrdExtractedConfig {
     private List<BrdFieldDefinitionDto> fieldDefinitions;
     private List<BrdRuleDto> rules;
     private Double confidence;
+
+    @JsonDeserialize(using = LenientStringListDeserializer.class)
     private List<String> warnings;
 
     @Data
