@@ -25,16 +25,19 @@ public class AuditController {
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> listAuditLogs(
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
+
+            @RequestParam(required = false) String entityId,
+            @RequestParam(required = false) String sourceService,
             @RequestParam(required = false) Long   userId,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,  // renamed
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Page<AuditLogResponse> result = auditService.listAuditLogs(
-                action, entityType, userId, dateFrom, dateTo, page, size);
+                action, entityType, entityId, sourceService, userId, fromDate, toDate, page, size);
         return ResponseEntity.ok(ApiResponse.success(result, "Audit logs fetched"));
     }
 
