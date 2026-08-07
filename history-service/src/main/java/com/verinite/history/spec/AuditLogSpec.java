@@ -15,6 +15,8 @@ public class AuditLogSpec {
     public static Specification<AuditLog> filter(
             String action,
             String entityType,
+            String entityId,
+            String sourceService,
             Long userId,
             LocalDate dateFrom,
             LocalDate dateTo) {
@@ -27,6 +29,12 @@ public class AuditLogSpec {
             }
             if (entityType != null && !entityType.isBlank()) {
                 predicates.add(cb.equal(root.get("entityType"), entityType));
+            }
+            if (entityId != null && !entityId.isBlank()) {
+                predicates.add(cb.equal(root.get("entityId"), entityId));
+            }
+            if (sourceService != null && !sourceService.isBlank()) {
+                predicates.add(cb.equal(root.get("sourceService"), sourceService));
             }
             if (userId != null) {
                 predicates.add(cb.equal(root.get("userId"), userId));

@@ -20,13 +20,17 @@ public class AuditService {
     private final AuditLogRepository auditLogRepository;
 
     public Page<AuditLogResponse> listAuditLogs(
-            String action, String entityType, Long userId,
+            String action, String entityType, String entityId, String sourceService, Long userId,
             LocalDate dateFrom, LocalDate dateTo,
             int page, int size) {
-
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Specification<AuditLog> spec = AuditLogSpec.filter(action, entityType, userId, dateFrom, dateTo);
+        Specification<AuditLog> spec =
+                AuditLogSpec.filter(action, entityType, entityId, sourceService, userId, dateFrom, dateTo);
         return auditLogRepository.findAll(spec, pageable).map(this::toResponse);
+
+//        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+//        Specification<AuditLog> spec = AuditLogSpec.filter(action, entityType, userId, dateFrom, dateTo);
+//        return auditLogRepository.findAll(spec, pageable).map(this::toResponse);
     }
 
     public AuditLogResponse getById(Long id) {
