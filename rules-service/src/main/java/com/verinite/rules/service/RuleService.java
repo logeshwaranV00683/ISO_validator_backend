@@ -24,10 +24,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RuleService {
 
-    private final RuleRepository             ruleRepository;
+    private final RuleRepository ruleRepository;
     private final RuleAllowedValueRepository allowedValueRepository;
-    private final RuleEventPublisher         eventPublisher;
-    private final ObjectMapper               objectMapper;
+    private final RuleEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
     private final FieldDefinitionService fieldDefinitionService;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -38,6 +38,9 @@ public class RuleService {
     @Transactional
     public RuleDto create(CreateRuleRequest req) {
         validateRequired(req);
+        validateLengthAgainstFieldDefinition(
+                req.getProfileId(), req.getMti(), req.getDeNumber(),
+                req.getMinLength(), req.getMaxLength(), req.getExactLength());
 
         if (ruleRepository.existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
                 req.getProfileId(), req.getMti(), req.getDeNumber())) {
@@ -65,10 +68,7 @@ public class RuleService {
         ValidationRule saved = ruleRepository.save(rule);  // cascade saves allowed values too
 
 
-        fieldDefinitionService.createIfNotExists(saved);
-
-
-
+        fieldDefinitionService.syncFromRule(saved);
 
 
         publishAudit("CREATE", "RULE", saved.getId(),
@@ -103,7 +103,9 @@ public class RuleService {
         return ruleRepository.findEffectiveRules(profileId, mti, LocalDate.now());
     }
 
-    /** Raw entity for soft-delete — caller needs profileId + mti before deleting. */
+    /**
+     * Raw entity for soft-delete — caller needs profileId + mti before deleting.
+     */
     public ValidationRule getById(Long id) {
         return findOrThrow(id);
     }
@@ -114,26 +116,32 @@ public class RuleService {
 
     @Transactional
     public RuleDto update(Long id, UpdateRuleRequest req) {
-        ValidationRule rule   = findOrThrow(id);
-        String         before = toJson(rule);
+        ValidationRule rule = findOrThrow(id);
+        String before = toJson(rule);
+        validateLengthAgainstFieldDefinition(
+                rule.getProfileId(), rule.getMti(), rule.getDeNumber(),
+                req.getMinLength() != null ? req.getMinLength() : rule.getMinLength(),
+                req.getMaxLength() != null ? req.getMaxLength() : rule.getMaxLength(),
+                req.getExactLength() != null ? req.getExactLength() : rule.getExactLength());
 
-        if (req.getFieldName()     != null) rule.setFieldName(req.getFieldName());
-        if (req.getIsMandatory()   != null) rule.setIsMandatory(req.getIsMandatory());
-        if (req.getMinLength()     != null) rule.setMinLength(req.getMinLength());
-        if (req.getMaxLength()     != null) rule.setMaxLength(req.getMaxLength());
-        if (req.getExactLength()   != null) rule.setExactLength(req.getExactLength());
-        if (req.getDataType()      != null) rule.setDataType(req.getDataType());
-        if (req.getPatternRegex()  != null) rule.setPatternRegex(req.getPatternRegex());
-        if (req.getSeverity()      != null) rule.setSeverity(req.getSeverity());
-        if (req.getPriority()      != null) rule.setPriority(req.getPriority());
-        if (req.getActive()        != null) rule.setActive(req.getActive());
+        if (req.getFieldName() != null) rule.setFieldName(req.getFieldName());
+        if (req.getIsMandatory() != null) rule.setIsMandatory(req.getIsMandatory());
+        if (req.getMinLength() != null) rule.setMinLength(req.getMinLength());
+        if (req.getMaxLength() != null) rule.setMaxLength(req.getMaxLength());
+        if (req.getExactLength() != null) rule.setExactLength(req.getExactLength());
+        if (req.getDataType() != null) rule.setDataType(req.getDataType());
+        if (req.getPatternRegex() != null) rule.setPatternRegex(req.getPatternRegex());
+        if (req.getSeverity() != null) rule.setSeverity(req.getSeverity());
+        if (req.getPriority() != null) rule.setPriority(req.getPriority());
+        if (req.getActive() != null) rule.setActive(req.getActive());
         if (req.getEffectiveFrom() != null) rule.setEffectiveFrom(req.getEffectiveFrom());
-        if (req.getEffectiveTo()   != null) rule.setEffectiveTo(req.getEffectiveTo());
-        if (req.getDescription()   != null) rule.setDescription(req.getDescription());
+        if (req.getEffectiveTo() != null) rule.setEffectiveTo(req.getEffectiveTo());
+        if (req.getDescription() != null) rule.setDescription(req.getDescription());
 
         rule.setUpdatedBy(UserContext.getUsername());   // String, not Long
 
         ValidationRule saved = ruleRepository.save(rule);
+        fieldDefinitionService.syncFromRule(saved);
 
         publishAudit("UPDATE", "RULE", saved.getId(),
                 buildEntityName(saved), before, toJson(saved),
@@ -148,8 +156,8 @@ public class RuleService {
 
     @Transactional
     public RuleDto toggleStatus(Long id) {
-        ValidationRule rule   = findOrThrow(id);
-        String         before = toJson(rule);
+        ValidationRule rule = findOrThrow(id);
+        String before = toJson(rule);
 
         rule.setActive(!Boolean.TRUE.equals(rule.getActive()));
         rule.setUpdatedBy(UserContext.getUsername());
@@ -170,8 +178,8 @@ public class RuleService {
 
     @Transactional
     public void softDelete(Long id) {
-        ValidationRule rule   = findOrThrow(id);
-        String         before = toJson(rule);
+        ValidationRule rule = findOrThrow(id);
+        String before = toJson(rule);
 
         rule.setDeletedAt(LocalDateTime.now());   // deleted_at IS NOT NULL = deleted
         rule.setActive(false);
@@ -192,8 +200,10 @@ public class RuleService {
     public BulkImportResult bulkImport(BulkImportRulesRequest req) {
         int imported = 0, updated = 0;
 
-        // Fetch all existing non-deleted rules for this profile+mti
-        List<ValidationRule> existing = ruleRepository.findAllNonDeleted(
+        // CHANGED: was findAllNonDeleted — now includes soft-deleted rows so a
+        // re-import revives them instead of trying to insert a duplicate that
+        // collides with the leftover deleted row on (profileId, mti, deNumber).
+        List<ValidationRule> existing = ruleRepository.findByProfileIdAndMtiIncludingDeleted(
                 req.getProfileId(), req.getMti());
 
         Map<String, ValidationRule> existingByDeNumber = existing.stream()
@@ -204,14 +214,15 @@ public class RuleService {
                 ));
 
         if ("REPLACE".equalsIgnoreCase(req.getStrategy())) {
-            // Soft-delete rules NOT in the incoming list
             Set<String> incomingDeNumbers = req.getRules().stream()
                     .map(CreateRuleRequest::getDeNumber)
                     .collect(Collectors.toSet());
 
             for (ValidationRule r : existing) {
-                if (!incomingDeNumbers.contains(r.getDeNumber())) {
-                    r.setDeletedAt(LocalDateTime.now());  // soft-delete
+                // NEW: only touch currently-alive rows here — no point re-deleting
+                // something that's already soft-deleted.
+                if (r.getDeletedAt() == null && !incomingDeNumbers.contains(r.getDeNumber())) {
+                    r.setDeletedAt(LocalDateTime.now());
                     r.setActive(false);
                     ruleRepository.save(r);
                 }
@@ -223,7 +234,6 @@ public class RuleService {
         for (int i = 0; i < req.getRules().size(); i++) {
             CreateRuleRequest ruleReq = req.getRules().get(i);
 
-            // Propagate parent fields
             ruleReq.setProfileId(req.getProfileId());
             ruleReq.setProfileName(req.getProfileName());
             ruleReq.setMti(req.getMti());
@@ -232,10 +242,11 @@ public class RuleService {
             if (existingByDeNumber.containsKey(ruleReq.getDeNumber())) {
                 ValidationRule existingRule = existingByDeNumber.get(ruleReq.getDeNumber());
                 applyBulkUpdate(existingRule, ruleReq);
+                existingRule.setDeletedAt(null); // NEW — revive if it was previously soft-deleted
+                existingRule.setActive(true);    // NEW — un-deactivate on revival
                 toSave.add(existingRule);
                 updated++;
             } else {
-                // Insert new
                 toSave.add(buildEntityFromRequest(ruleReq));
                 imported++;
             }
@@ -243,10 +254,8 @@ public class RuleService {
 
         ruleRepository.saveAll(toSave);
 
-        // One cache invalidation for the whole batch
         eventPublisher.publishRuleUpdated(req.getProfileId(), req.getMti());
 
-        // One audit event for the whole batch
         publishAudit("RULE_IMPORT", "RULE", null,
                 "Bulk import: " + imported + " inserted, " + updated + " updated — "
                         + "profileId=" + req.getProfileId() + " mti=" + req.getMti(),
@@ -350,15 +359,15 @@ public class RuleService {
                 .mti(req.getMti())
                 .deNumber(req.getDeNumber())
                 .fieldName(req.getFieldName())
-                .isMandatory(req.getIsMandatory()  != null ? req.getIsMandatory()  : false)
+                .isMandatory(req.getIsMandatory() != null ? req.getIsMandatory() : false)
                 .minLength(req.getMinLength())
                 .maxLength(req.getMaxLength())
                 .exactLength(req.getExactLength())
                 .dataType(req.getDataType())
                 .patternRegex(req.getPatternRegex())
-                .severity(req.getSeverity()  != null ? req.getSeverity()  : Severity.CRITICAL)
-                .priority(req.getPriority()  != null ? req.getPriority()  : 1)
-                .active(req.getIsActive()    != null ? req.getIsActive()  : true)
+                .severity(req.getSeverity() != null ? req.getSeverity() : Severity.CRITICAL)
+                .priority(req.getPriority() != null ? req.getPriority() : 1)
+                .active(req.getIsActive() != null ? req.getIsActive() : true)
                 .effectiveFrom(req.getEffectiveFrom())
                 .effectiveTo(req.getEffectiveTo())
                 .description(req.getDescription())
@@ -367,18 +376,18 @@ public class RuleService {
     }
 
     private void applyBulkUpdate(ValidationRule rule, CreateRuleRequest req) {
-        if (req.getFieldName()     != null) rule.setFieldName(req.getFieldName());
-        if (req.getIsMandatory()   != null) rule.setIsMandatory(req.getIsMandatory());
-        if (req.getMinLength()     != null) rule.setMinLength(req.getMinLength());
-        if (req.getMaxLength()     != null) rule.setMaxLength(req.getMaxLength());
-        if (req.getExactLength()   != null) rule.setExactLength(req.getExactLength());
-        if (req.getDataType()      != null) rule.setDataType(req.getDataType());
-        if (req.getPatternRegex()  != null) rule.setPatternRegex(req.getPatternRegex());
-        if (req.getSeverity()      != null) rule.setSeverity(req.getSeverity());
-        if (req.getPriority()      != null) rule.setPriority(req.getPriority());
+        if (req.getFieldName() != null) rule.setFieldName(req.getFieldName());
+        if (req.getIsMandatory() != null) rule.setIsMandatory(req.getIsMandatory());
+        if (req.getMinLength() != null) rule.setMinLength(req.getMinLength());
+        if (req.getMaxLength() != null) rule.setMaxLength(req.getMaxLength());
+        if (req.getExactLength() != null) rule.setExactLength(req.getExactLength());
+        if (req.getDataType() != null) rule.setDataType(req.getDataType());
+        if (req.getPatternRegex() != null) rule.setPatternRegex(req.getPatternRegex());
+        if (req.getSeverity() != null) rule.setSeverity(req.getSeverity());
+        if (req.getPriority() != null) rule.setPriority(req.getPriority());
         if (req.getEffectiveFrom() != null) rule.setEffectiveFrom(req.getEffectiveFrom());
-        if (req.getEffectiveTo()   != null) rule.setEffectiveTo(req.getEffectiveTo());
-        if (req.getDescription()   != null) rule.setDescription(req.getDescription());
+        if (req.getEffectiveTo() != null) rule.setEffectiveTo(req.getEffectiveTo());
+        if (req.getDescription() != null) rule.setDescription(req.getDescription());
         rule.setUpdatedBy(UserContext.getUsername());
     }
 
@@ -422,8 +431,11 @@ public class RuleService {
     }
 
     private String toJson(Object obj) {
-        try { return objectMapper.writeValueAsString(obj); }
-        catch (Exception e) { return "{}"; }
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     private String buildEntityName(ValidationRule rule) {
@@ -466,5 +478,56 @@ public class RuleService {
                 .updatedByName(rule.getUpdatedBy())
                 .allowedValues(values)
                 .build();
+    }
+
+    private void validateLengthAgainstFieldDefinition(
+            Long profileId, String mti, String deNumber,
+            Integer minLength, Integer maxLength, Integer exactLength) {
+
+        fieldDefinitionService.findEntity(profileId, mti, deNumber).ifPresent(fieldDef -> {
+            Integer ceiling = fieldDef.getSourceMaxLength();
+            if (ceiling == null) return;
+
+            checkLengthBound("minLength",   minLength,   ceiling, deNumber);
+            checkLengthBound("maxLength",   maxLength,   ceiling, deNumber);
+            checkLengthBound("exactLength", exactLength, ceiling, deNumber);
+        });
+    }
+
+    private void checkLengthBound(String fieldLabel, Integer value, int definedMax, String deNumber) {
+        if (value == null) return; // not provided — nothing to validate
+        if (value <= 0) {
+            throw new IllegalArgumentException(
+                    fieldLabel + " must be greater than 0 (DE" + deNumber + ")");
+        }
+        if (value > definedMax) {
+            throw new IllegalArgumentException(
+                    fieldLabel + " (" + value + ") cannot exceed the field's defined length ("
+                            + definedMax + ") for DE" + deNumber);
+        }
+    }
+
+    @Transactional
+    public int deleteAllForFormat(Long profileId, String mti) {
+        List<ValidationRule> rules = ruleRepository.findAllNonDeleted(profileId, mti);
+        LocalDateTime now = LocalDateTime.now();
+        String username = UserContext.getUsername();
+
+        for (ValidationRule rule : rules) {
+            rule.setDeletedAt(now);
+            rule.setActive(false);
+            rule.setUpdatedBy(username);
+        }
+        ruleRepository.saveAll(rules);
+
+        if (!rules.isEmpty()) {
+            publishAudit("DELETE", "RULE", null,
+                    "Bulk delete for profileId=" + profileId + " mti=" + mti,
+                    null, null,
+                    rules.size() + " rules deleted (format removed)");
+        }
+
+        log.info("[Format Delete] Soft-deleted {} rules for profileId={} mti={}", rules.size(), profileId, mti);
+        return rules.size();
     }
 }

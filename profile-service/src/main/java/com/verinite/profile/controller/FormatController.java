@@ -28,6 +28,12 @@ public class FormatController {
                 .body(ApiResponse.success(formatService.create(req, username), "Format created"));
     }
 
+
+    @GetMapping("/mtis")
+    public ResponseEntity<ApiResponse<List<String>>> getMtis(@RequestParam Long profileId) {
+        return ResponseEntity.ok(ApiResponse.success(formatService.getMtisForProfile(profileId), "MTIs fetched"));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<FormatDto>>> getAllFormats() {
         return ResponseEntity.ok(ApiResponse.success(formatService.getAll(), "Formats fetched"));

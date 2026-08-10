@@ -67,6 +67,14 @@ public class RuleController {
         return ResponseEntity.ok(updated);
     }
 
+    // DELETE /rules/by-format?profileId=1&mti=0200
+    @DeleteMapping("/by-format")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Integer> deleteAllForFormat(
+            @RequestParam Long profileId, @RequestParam String mti) {
+        return ResponseEntity.ok(ruleService.deleteAllForFormat(profileId, mti));
+    }
+
     // PATCH /rules/{id}/status — toggle active/inactive
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")

@@ -87,6 +87,9 @@ public class FieldDefinition {
     @Column(name = "description", length = 255)
     private String description;
 
+    @Column(name = "source_max_length")
+    private Integer sourceMaxLength;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

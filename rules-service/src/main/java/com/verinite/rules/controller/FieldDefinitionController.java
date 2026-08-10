@@ -49,6 +49,14 @@ public class FieldDefinitionController {
         return ResponseEntity.ok(fieldDefinitionService.update(id, req));
     }
 
+    // DELETE /field-definitions/by-format?profileId=1&mti=0200
+    @DeleteMapping("/by-format")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Integer> deleteAllForFormat(
+            @RequestParam Long profileId, @RequestParam String mti) {
+        return ResponseEntity.ok(fieldDefinitionService.deleteAllForFormat(profileId, mti));
+    }
+
     // DELETE /field-definitions/{id} — soft delete → 204 No Content
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")

@@ -23,4 +23,10 @@ public interface FieldDefinitionRepository extends JpaRepository<FieldDefinition
     boolean existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
             Long profileId, String mti, String deNumber
     );
+
+    List<FieldDefinition> findByProfileIdAndMti(Long profileId, String mti);
+
+    Optional<FieldDefinition> findByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
+            Long profileId, String mti, String deNumber
+    );
 }

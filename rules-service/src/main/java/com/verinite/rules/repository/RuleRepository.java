@@ -11,6 +11,10 @@ import java.util.Optional;
 
 public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
 
+
+
+
+
     /**
      * Effective rules: active, not deleted, date-windowed, sorted by priority.
      * Called by validation-engine via internal Feign endpoint.
@@ -52,4 +56,21 @@ public interface RuleRepository extends JpaRepository<ValidationRule, Long> {
     boolean existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
             Long profileId, String mti, String deNumber
     );
+
+    // Includes soft-deleted rows too, so bulk-import can revive them instead of colliding on insert.
+    @Query("""
+    SELECT r FROM ValidationRule r
+    WHERE r.profileId = :profileId
+      AND r.mti       = :mti
+    ORDER BY r.priority ASC
+""")
+    List<ValidationRule> findByProfileIdAndMtiIncludingDeleted(
+            @Param("profileId") Long profileId,
+            @Param("mti")       String mti
+    );
+
+    Optional<ValidationRule> findByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
+            Long profileId, String mti, String deNumber);
+
+
 }
