@@ -31,13 +31,18 @@ public class HistoryService {
 
     /**
      * Paginated run list with all supported filters.
-     * FIX: dateFrom/dateTo were being silently ignored (always passed null to spec).
      */
     public Page<HistorySummaryDTO> listRuns(
             Long profileId, String mti, String status, Long userId,
-            String responseCode,
-            LocalDate dateFrom, LocalDate dateTo,               // FIX: added
+            String responseCode, String search,
+            LocalDate dateFrom, LocalDate dateTo,
             int page, int size, String sortBy, String sortDir) {
+
+
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new IllegalArgumentException(
+                    "Invalid date range: 'From' date must not be after 'To' date.");
+        }
 
         Sort sort = sortDir.equalsIgnoreCase("asc")
                 ? Sort.by(sortBy).ascending()
@@ -46,7 +51,7 @@ public class HistoryService {
 
         Specification<ValidationRun> spec = ValidationRunSpec.filter(
                 profileId, userId, status, mti,
-                dateFrom, dateTo);                              // FIX: now forwarded
+                dateFrom, dateTo, search);
 
         return runRepository.findAll(spec, pageable)
                 .map(this::toSummary);
@@ -108,6 +113,7 @@ public class HistoryService {
                 .currencyCode(r.getCurrencyCode())
                 .totalDurationMs(r.getTotalDurationMs())
                 .aiEnabled(r.getAiEnabled())
+                .rawMessage(r.getRawMessage())
                 .createdAt(r.getCreatedAt())
                 .build();
     }
@@ -182,7 +188,7 @@ public class HistoryService {
 
     public String exportRuns(Long profileId, String mti, String status, String format) {
         Specification<ValidationRun> spec = ValidationRunSpec.filter(
-                profileId, null, status, mti, null, null);
+                profileId, null, status, mti, null, null, null);
         List<ValidationRun> runs = runRepository.findAll(spec);
 
         if ("csv".equalsIgnoreCase(format)) {
