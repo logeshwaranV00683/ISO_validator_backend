@@ -15,13 +15,12 @@ public class ValidationRunSpec {
 
     public static Specification<ValidationRun> filter(
             Long profileId, Long userId, String status,
-            String mti, LocalDate dateFrom, LocalDate dateTo) {
+            String mti, LocalDate dateFrom, LocalDate dateTo,
+            String search) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // FIX Bug 2: was cb.equal(root.get("isDeleted"), false)
-            // Entity has no isDeleted field — soft delete uses deletedAt timestamp
             predicates.add(cb.isNull(root.get("deletedAt")));
 
             if (profileId != null)
@@ -37,6 +36,15 @@ public class ValidationRunSpec {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), dateFrom.atStartOfDay()));
             if (dateTo != null)
                 predicates.add(cb.lessThan(root.get("createdAt"), dateTo.plusDays(1).atStartOfDay()));
+
+
+            if (search != null && !search.isBlank()) {
+                String like = "%" + search.trim().toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("runReference")), like),
+                        cb.like(cb.lower(root.get("mti")), like)
+                ));
+            }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
