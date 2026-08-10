@@ -24,7 +24,7 @@ public class HistoryController {
     private final HistoryService historyService;
     private final StatsService   statsService;
 
-    /** GET /history — was GET /history/runs — /runs subpath removed (F3) */
+    /** GET /history */
     @GetMapping
     public ResponseEntity<ApiResponse<Page<HistorySummaryDTO>>> listRuns(
             @RequestParam(required = false) Long   profileId,
@@ -33,23 +33,24 @@ public class HistoryController {
             @RequestParam(required = false) Long   userId,
             @RequestParam(required = false) String responseCode,
             @RequestParam(required = false) String environment,
+            @RequestParam(required = false) String search,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0")         int    page,
             @RequestParam(defaultValue = "20")        int    size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc")      String sortDir) {
 
         Page<HistorySummaryDTO> result = historyService.listRuns(
-                profileId, mti, status, userId, responseCode,
-                dateFrom, dateTo, page, size, sortBy, sortDir);
+                profileId, mti, status, userId, responseCode, search,
+                fromDate, toDate, page, size, sortBy, sortDir);
 
         return ResponseEntity.ok(ApiResponse.success(result, "Runs fetched"));
     }
 
-    /** GET /history/{runReference} — was GET /history/runs/{runReference} */
+    /** GET /history/{runReference} */
     @GetMapping("/{runReference}")
     public ResponseEntity<ApiResponse<HistoryDetailDTO>> getByRunReference(
             @PathVariable String runReference) {
@@ -57,7 +58,7 @@ public class HistoryController {
                 historyService.getByRunReference(runReference), "Run found"));
     }
 
-    /** DELETE /history/{runReference} — was DELETE /history/runs/{runReference} */
+    /** DELETE /history/{runReference} */
     @DeleteMapping("/{runReference}")
     public ResponseEntity<ApiResponse<Void>> softDelete(
             @PathVariable String runReference) {
