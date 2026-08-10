@@ -39,5 +39,6 @@ public class HistorySummaryDTO {
     private String    currencyCode;
     private Integer   totalDurationMs;
     private Boolean   aiEnabled;
+    private String    rawMessage;
     private LocalDateTime createdAt;
 }
