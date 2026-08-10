@@ -610,3 +610,6 @@ SELECT
 FROM   information_schema.tables
 WHERE  table_schema = 'iso_validator_db'
 ORDER  BY table_name;
+
+
+ALTER TABLE field_definitions ADD COLUMN source_max_length INTEGER;
