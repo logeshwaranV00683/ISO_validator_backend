@@ -42,6 +42,48 @@ INSERT INTO system_config (config_key, config_value, config_type, description, i
 --    is_sensitive masks value in GET /ai/config response.
 -- ================================================================
 
+
+ALTER TABLE ai_prompt_templates
+MODIFY COLUMN scope ENUM('GLOBAL', 'PROFILE', 'BRD_PARSE') NOT NULL;
+
+
+INSERT INTO ai_prompt_template (
+    template_name,
+    scope,
+    profile_id,
+    profile_name,
+    prompt_template,
+    variables_used,
+    current_version,
+    active,
+    deleted_at,
+    created_by,
+    updated_by
+)
+VALUES (
+    'BRD_PARSE',
+    'BRD_PARSE',
+    NULL,
+    NULL,
+    'You are an ISO 8583 payment message expert.
+
+Analyze the following BRD document and extract the COMPLETE switch configuration.
+
+BRD Content:
+{brd_text}
+
+IMPORTANT: The BRD may describe MANY data elements (DEs) and MANY validation rules.
+You MUST include ONE entry in "fieldDefinitions" for EVERY data element mentioned in the FIELD DEFINITIONS section, and ONE entry in "rules" for EVERY rule mentioned in the VALIDATION RULES section. Do NOT stop after the first one. Do NOT summarize or omit any field or rule.
+
+Return ONLY a valid JSON object with the required structure.',
+    'brd_text',
+    1,
+    1,
+    NULL,
+    'SYSTEM',
+    'SYSTEM'
+);
+
 INSERT INTO ollama_config (config_key, config_value, config_type, description, is_sensitive, updated_by) VALUES
 ('ollama.enabled',         'true',                    'BOOLEAN', 'Enable/disable Ollama AI integration globally',             FALSE, 'SYSTEM'),
 ('ollama.host',        'http://localhost:11434',  'STRING',  'Ollama API base URL',                                       FALSE, 'SYSTEM'),
