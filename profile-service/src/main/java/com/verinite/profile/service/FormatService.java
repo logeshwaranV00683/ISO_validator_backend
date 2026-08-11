@@ -499,15 +499,7 @@ public class FormatService {
         }
     }
 
-    /**
-     * Parses the format's packager XML and pushes matching Field Definitions
-     * and Rules into rules-service (MERGE — upsert by deNumber), so uploading
-     * an XML automatically populates both Field Definitions and Rules Manager.
-     *
-     * Best-effort: if mti is missing/invalid, or rules-service is unreachable,
-     * this logs and returns without failing the format save itself — the XML
-     * upload should never be blocked by this secondary sync.
-     */
+
     private void syncFieldDefinitionsAndRules(MessageFormat format, String mti) {
         String normalizedMti = normalizeMti(mti);
         if (normalizedMti == null) {
@@ -572,7 +564,7 @@ public class FormatService {
                                     .maxLength(f.getLength() != null ? f.getLength() : 1)
                                     .dataType(packagerXmlFieldParser.resolveDataType(f.getIsoClass()))
                                     .severity("WARNING")
-                                    .priority(1)
+                                    .priority(Integer.parseInt(f.getDeNumber()))
                                     .isActive(true)
                                     .description("Auto-generated from format XML: " + format.getFormatName())
                                     .build())
