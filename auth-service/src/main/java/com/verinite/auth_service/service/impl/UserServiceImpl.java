@@ -10,7 +10,6 @@ import com.verinite.auth_service.service.UserService;
 import com.verinite.common.enums.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -45,15 +44,22 @@ public class UserServiceImpl implements UserService {
         return mapToDto(userRepository.save(user));
     }
 
+    // BUG 1/2/3 FIX: role param now actually applied, filtering done at the DB level
     @Override
-    public Page<UserDto> getAllUsers(Pageable pageable) {
-        List<UserDto> all = userRepository.findByDeletedAtIsNull()
-                .stream().map(this::mapToDto).toList();
-
-        int start = (int) pageable.getOffset();
-        int end   = Math.min(start + pageable.getPageSize(), all.size());
-        List<UserDto> slice = (start >= all.size()) ? List.of() : all.subList(start, end);
-        return new PageImpl<>(slice, pageable, all.size());
+    public Page<UserDto> getAllUsers(String role, Pageable pageable) {
+        Page<User> page;
+        if (role == null || role.isBlank()) {
+            page = userRepository.findByDeletedAtIsNull(pageable);
+        } else {
+            Role parsedRole;
+            try {
+                parsedRole = Role.valueOf(role.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid role: " + role + ". Valid: ADMIN, ANALYST, VIEWER");
+            }
+            page = userRepository.findByDeletedAtIsNullAndRole(parsedRole, pageable);
+        }
+        return page.map(this::mapToDto);
     }
 
     @Override
