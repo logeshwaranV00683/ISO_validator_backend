@@ -9,12 +9,12 @@ import java.util.Optional;
 public interface FieldDefinitionRepository extends JpaRepository<FieldDefinition, Long> {
 
     // Public API — builder-visible, alive only
-    List<FieldDefinition> findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNull(
+    List<FieldDefinition> findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNullOrderByDisplayOrderAsc(
             Long profileId, String mti
     );
 
     // Internal engine — all alive fields including hidden
-    List<FieldDefinition> findByProfileIdAndMtiAndDeletedAtIsNull(
+    List<FieldDefinition> findByProfileIdAndMtiAndDeletedAtIsNullOrderByDisplayOrderAsc(
             Long profileId, String mti
     );
 
