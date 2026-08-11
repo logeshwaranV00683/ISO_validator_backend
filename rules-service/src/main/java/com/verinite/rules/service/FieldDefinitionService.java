@@ -161,7 +161,7 @@ public class FieldDefinitionService {
 
     public List<FieldDefinitionDto> getVisibleFields(Long profileId, String mti) {
         return fieldDefinitionRepository
-                .findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNull(profileId, mti)
+                .findByProfileIdAndMtiAndIsBuilderVisibleTrueAndDeletedAtIsNullOrderByDisplayOrderAsc(profileId, mti)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -178,7 +178,7 @@ public class FieldDefinitionService {
     // ═══════════════════════════════════════════════════════════════════════
 
     public List<FieldDefinition> getByProfileAndMti(Long profileId, String mti) {
-        return fieldDefinitionRepository.findByProfileIdAndMtiAndDeletedAtIsNull(profileId, mti);
+        return fieldDefinitionRepository.findByProfileIdAndMtiAndDeletedAtIsNullOrderByDisplayOrderAsc(profileId, mti);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -447,7 +447,7 @@ public class FieldDefinitionService {
 
     @Transactional
     public int deleteAllForFormat(Long profileId, String mti) {
-        List<FieldDefinition> defs = fieldDefinitionRepository.findByProfileIdAndMtiAndDeletedAtIsNull(profileId, mti);
+        List<FieldDefinition> defs = fieldDefinitionRepository.findByProfileIdAndMtiAndDeletedAtIsNullOrderByDisplayOrderAsc(profileId, mti);
         LocalDateTime now = LocalDateTime.now();
 
         for (FieldDefinition def : defs) {
