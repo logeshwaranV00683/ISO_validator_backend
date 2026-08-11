@@ -41,10 +41,11 @@ public class UserController {
                 .body(ApiResponse.success(userService.createUser(request), "User created"));
     }
 
-    // GAP 5 FIX: now paginated
+    // GAP 5 FIX: paginated. BUG 1/2/3 FIX: role param now accepted and passed through
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST','VIEWER')")
     public ResponseEntity<ApiResponse<Page<UserDto>>> getUsers(
+            @RequestParam(required = false)          String role,
             @RequestParam(defaultValue = "0")        int    page,
             @RequestParam(defaultValue = "20")       int    size,
             @RequestParam(defaultValue = "username") String sortBy,
@@ -53,7 +54,7 @@ public class UserController {
         Sort sort = sortDir.equalsIgnoreCase("asc")
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
-        Page<UserDto> result = userService.getAllUsers(PageRequest.of(page, size, sort));
+        Page<UserDto> result = userService.getAllUsers(role, PageRequest.of(page, size, sort));
         return ResponseEntity.ok(ApiResponse.success(result, "Users fetched"));
     }
 
