@@ -10,7 +10,7 @@ import java.util.List;
 
 public interface UserService {
     UserDto createUser(CreateUserRequest request);
-    Page<UserDto> getAllUsers(Pageable pageable);       // GAP 5: paginated
+    Page<UserDto> getAllUsers(String role, Pageable pageable);  // BUG 1/2/3 fix: role filter added
     List<UserDto> getAllUsersUnpaged();                 // kept for internal use
     UserDto getUserById(Long id);
     UserDto updateUser(Long id, UpdateUserRequest request);   // BUG 2 fixed
