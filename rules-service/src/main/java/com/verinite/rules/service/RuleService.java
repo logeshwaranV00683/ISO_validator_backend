@@ -38,6 +38,7 @@ public class RuleService {
     @Transactional
     public RuleDto create(CreateRuleRequest req) {
         validateRequired(req);
+        validateEffectiveDates(req.getEffectiveFrom(), req.getEffectiveTo());
         validateLengthAgainstFieldDefinition(
                 req.getProfileId(), req.getMti(), req.getDeNumber(),
                 req.getMinLength(), req.getMaxLength(), req.getExactLength());
@@ -118,6 +119,9 @@ public class RuleService {
     public RuleDto update(Long id, UpdateRuleRequest req) {
         ValidationRule rule = findOrThrow(id);
         String before = toJson(rule);
+        validateEffectiveDates(
+                req.getEffectiveFrom() != null ? req.getEffectiveFrom() : rule.getEffectiveFrom(),
+                req.getEffectiveTo()   != null ? req.getEffectiveTo()   : rule.getEffectiveTo());
         validateLengthAgainstFieldDefinition(
                 rule.getProfileId(), rule.getMti(), rule.getDeNumber(),
                 req.getMinLength() != null ? req.getMinLength() : rule.getMinLength(),
@@ -126,6 +130,9 @@ public class RuleService {
 
         if (req.getFieldName() != null) rule.setFieldName(req.getFieldName());
         if (req.getIsMandatory() != null) rule.setIsMandatory(req.getIsMandatory());
+        if(! (req.getMinLength()>req.getMaxLength())){
+            throw new IllegalArgumentException("Minimum length must be greater than max length");
+        }
         if (req.getMinLength() != null) rule.setMinLength(req.getMinLength());
         if (req.getMaxLength() != null) rule.setMaxLength(req.getMaxLength());
         if (req.getExactLength() != null) rule.setExactLength(req.getExactLength());
@@ -529,5 +536,12 @@ public class RuleService {
 
         log.info("[Format Delete] Soft-deleted {} rules for profileId={} mti={}", rules.size(), profileId, mti);
         return rules.size();
+    }
+
+    private void validateEffectiveDates(LocalDate effectiveFrom, LocalDate effectiveTo) {
+        if (effectiveFrom != null && effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+            throw new IllegalArgumentException(
+                    "Effective To (" + effectiveTo + ") cannot be before Effective From (" + effectiveFrom + ")");
+        }
     }
 }
