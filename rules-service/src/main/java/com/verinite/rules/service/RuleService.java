@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +31,7 @@ public class RuleService {
     private final RuleEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final FieldDefinitionService fieldDefinitionService;
+    private static final Pattern PRINTABLE_ASCII_ONLY = Pattern.compile("^[\\x20-\\x7E]*$");
 
     // ═══════════════════════════════════════════════════════════════════════
     // CREATE
@@ -39,6 +42,7 @@ public class RuleService {
     public RuleDto create(CreateRuleRequest req) {
         validateRequired(req);
         validateEffectiveDates(req.getEffectiveFrom(), req.getEffectiveTo());
+        validateRegex(req.getPatternRegex(), req.getDeNumber());
         validateLengthAgainstFieldDefinition(
                 req.getProfileId(), req.getMti(), req.getDeNumber(),
                 req.getMinLength(), req.getMaxLength(), req.getExactLength());
@@ -122,6 +126,9 @@ public class RuleService {
         validateEffectiveDates(
                 req.getEffectiveFrom() != null ? req.getEffectiveFrom() : rule.getEffectiveFrom(),
                 req.getEffectiveTo()   != null ? req.getEffectiveTo()   : rule.getEffectiveTo());
+        validateRegex(
+                req.getPatternRegex() != null ? req.getPatternRegex() : rule.getPatternRegex(),
+                rule.getDeNumber());
         validateLengthAgainstFieldDefinition(
                 rule.getProfileId(), rule.getMti(), rule.getDeNumber(),
                 req.getMinLength() != null ? req.getMinLength() : rule.getMinLength(),
@@ -130,10 +137,13 @@ public class RuleService {
 
         if (req.getFieldName() != null) rule.setFieldName(req.getFieldName());
         if (req.getIsMandatory() != null) rule.setIsMandatory(req.getIsMandatory());
-        if(! (req.getMinLength()>req.getMaxLength())){
-            throw new IllegalArgumentException("Minimum length must be greater than max length");
+        if (req.getMinLength() == null) throw new IllegalArgumentException("Minimum Length Cannot Be Null");
+
+        if( (req.getMinLength()>req.getMaxLength())){
+            throw new IllegalArgumentException("Minimum length cannot be greater than max length");
         }
-        if (req.getMinLength() != null) rule.setMinLength(req.getMinLength());
+        rule.setMinLength(req.getMinLength());
+        if(req.getMaxLength()!=null) rule.setMinLength(req.getMinLength());
         if (req.getMaxLength() != null) rule.setMaxLength(req.getMaxLength());
         if (req.getExactLength() != null) rule.setExactLength(req.getExactLength());
         if (req.getDataType() != null) rule.setDataType(req.getDataType());
@@ -144,6 +154,26 @@ public class RuleService {
         if (req.getEffectiveFrom() != null) rule.setEffectiveFrom(req.getEffectiveFrom());
         if (req.getEffectiveTo() != null) rule.setEffectiveTo(req.getEffectiveTo());
         if (req.getDescription() != null) rule.setDescription(req.getDescription());
+
+        if (req.getAllowedValues() != null) {
+            Set<String> incoming = new LinkedHashSet<>(req.getAllowedValues());
+            Set<String> existing = rule.getAllowedValues().stream()
+                    .map(RuleAllowedValue::getAllowedValue)
+                    .collect(Collectors.toSet());
+
+            rule.getAllowedValues().removeIf(av -> !incoming.contains(av.getAllowedValue()));
+
+            for (String v : incoming) {
+                if (!existing.contains(v)) {
+                    RuleAllowedValue av = RuleAllowedValue.builder()
+                            .rule(rule)
+                            .allowedValue(v)
+                            .createdBy(UserContext.getUsername())
+                            .build();
+                    rule.getAllowedValues().add(av);
+                }
+            }
+        }
 
         rule.setUpdatedBy(UserContext.getUsername());   // String, not Long
 
@@ -542,6 +572,24 @@ public class RuleService {
         if (effectiveFrom != null && effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
             throw new IllegalArgumentException(
                     "Effective To (" + effectiveTo + ") cannot be before Effective From (" + effectiveFrom + ")");
+        }
+    }
+
+    private void validateRegex(String patternRegex, String deNumber) {
+        if (patternRegex == null || patternRegex.isBlank()) return; // optional field
+
+
+        if (!PRINTABLE_ASCII_ONLY.matcher(patternRegex).matches()) {
+            throw new IllegalArgumentException(
+                    "Invalid regular expression for DE" + deNumber
+                            + ": only printable ASCII characters are allowed (no emoji or other Unicode symbols)");
+        }
+
+        try {
+            Pattern.compile(patternRegex);
+        } catch (PatternSyntaxException e) {
+            throw new IllegalArgumentException(
+                    "Invalid regular expression for DE" + deNumber + ": " + e.getDescription());
         }
     }
 }
