@@ -2,7 +2,9 @@ package com.verinite.rules.exception;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -107,5 +109,30 @@ public class GlobalExceptionHandler {
         body.put("meta",    metaMap);
 
         return ResponseEntity.status(status).body(body);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleJsonParseError(
+            HttpMessageNotReadableException ex) {
+
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("status", 400);
+        error.put("error", "Bad Request");
+        error.put("message",
+                "Invalid Request: Range Exceeded!.");
+
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String,Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex){
+
+        Map<String,Object> error=new LinkedHashMap<>();
+        error.put("status: ",400);
+        error.put("error: ","Bad Request");
+        error.put("message: ","Invalid Request: Range Limit Exceeded!");
+
+        return ResponseEntity.badRequest().body(error);
+
     }
 }
