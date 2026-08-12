@@ -436,7 +436,7 @@ public class FieldDefinitionService {
     // MAPPER
     // ═══════════════════════════════════════════════════════════════════════
 
-    FieldDefinitionDto toDto(FieldDefinition fd) {
+    public FieldDefinitionDto toDto(FieldDefinition fd) {
         return FieldDefinitionDto.builder()
                 .id(fd.getId())
                 .profileId(fd.getProfileId())
