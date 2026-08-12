@@ -5,6 +5,7 @@ import com.verinite.common.enums.Severity;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -30,4 +31,5 @@ public class UpdateRuleRequest {
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
     private String    description;
+    private List<String> allowedValues;
 }
