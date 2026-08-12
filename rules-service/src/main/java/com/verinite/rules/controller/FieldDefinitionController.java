@@ -21,9 +21,16 @@ public class FieldDefinitionController {
     // Returns only is_builder_visible=true fields
     @GetMapping
     public ResponseEntity<List<FieldDefinitionDto>> getFieldDefinitions(
-            @RequestParam Long   profileId,
+            @RequestParam Long profileId,
             @RequestParam String mti) {
-        return ResponseEntity.ok(fieldDefinitionService.getVisibleFields(profileId, mti));
+
+        return ResponseEntity.ok(
+                fieldDefinitionService.getByProfileAndMti(profileId, mti)
+                        .stream()
+                        .map(fieldDefinitionService::toDto)
+                        .toList()
+        );
+
     }
 
     // GET /field-definitions/{id}
