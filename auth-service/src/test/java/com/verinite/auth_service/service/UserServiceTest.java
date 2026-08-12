@@ -14,9 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -89,20 +87,39 @@ class UserServiceTest {
 
     @Test
     void getAllUsers_ReturnsActiveUsers() {
-        when(userRepository.findByDeletedAtIsNull()).thenReturn(List.of(mockUser));
+        Pageable pageable = PageRequest.of(
+                0,
+                20,
+                Sort.by("username").ascending()
+        );
 
-        Page<UserDto> result = userService.getAllUsers(PageRequest.of(0, 20, Sort.by("username").ascending()));
+        Page<User> userPage = new PageImpl<>(List.of(mockUser), pageable, 1);
+
+        when(userRepository.findByDeletedAtIsNull(pageable))
+                .thenReturn(userPage);
+
+        Page<UserDto> result = userService.getAllUsers(null, pageable);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get().toList().getFirst().getUsername()).isEqualTo("testuser");
+        assertThat(result.getContent().getFirst().getUsername())
+                .isEqualTo("testuser");
     }
 
     @Test
     void getAllUsers_Empty_ReturnsEmptyList() {
-        when(userRepository.findByDeletedAtIsNull()).thenReturn(List.of());
+        Pageable pageable = PageRequest.of(
+                0,
+                20,
+                Sort.by("username").ascending()
+        );
 
-        assertThat(userService.getAllUsers(PageRequest.of(0, 20, Sort.by("username").ascending()))).isEmpty();
+        when(userRepository.findByDeletedAtIsNull(pageable))
+                .thenReturn(Page.empty(pageable));
+
+        assertThat(userService.getAllUsers(null, pageable))
+                .isEmpty();
     }
+
 
     // ─── getUserById ──────────────────────────────────────
 

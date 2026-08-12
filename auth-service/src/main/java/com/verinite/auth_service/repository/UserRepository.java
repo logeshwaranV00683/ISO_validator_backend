@@ -16,7 +16,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     List<User> findByDeletedAtIsNull();
 
-    // BUG 1/2/3 fix: paginated + role-filtered queries, done at the DB level
     Page<User> findByDeletedAtIsNull(Pageable pageable);
     Page<User> findByDeletedAtIsNullAndRole(Role role, Pageable pageable);
 }

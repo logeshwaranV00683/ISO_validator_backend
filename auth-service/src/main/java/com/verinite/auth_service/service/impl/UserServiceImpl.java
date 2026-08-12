@@ -44,7 +44,6 @@ public class UserServiceImpl implements UserService {
         return mapToDto(userRepository.save(user));
     }
 
-    // BUG 1/2/3 FIX: role param now actually applied, filtering done at the DB level
     @Override
     public Page<UserDto> getAllUsers(String role, Pageable pageable) {
         Page<User> page;
@@ -73,7 +72,6 @@ public class UserServiceImpl implements UserService {
         return mapToDto(findActive(id));
     }
 
-    // BUG 2 FIX: accepts UpdateUserRequest — never touches password
     @Override
     @Transactional
     public UserDto updateUser(Long id, UpdateUserRequest request) {

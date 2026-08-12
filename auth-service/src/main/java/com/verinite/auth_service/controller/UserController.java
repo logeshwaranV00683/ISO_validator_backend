@@ -41,7 +41,6 @@ public class UserController {
                 .body(ApiResponse.success(userService.createUser(request), "User created"));
     }
 
-    // GAP 5 FIX: paginated. BUG 1/2/3 FIX: role param now accepted and passed through
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST','VIEWER')")
     public ResponseEntity<ApiResponse<Page<UserDto>>> getUsers(
@@ -64,7 +63,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id), "User fetched"));
     }
 
-    // BUG 2 FIX: UpdateUserRequest — no password field
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserDto>> updateUser(
