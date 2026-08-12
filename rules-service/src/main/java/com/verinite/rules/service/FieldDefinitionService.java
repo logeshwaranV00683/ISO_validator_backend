@@ -41,6 +41,11 @@ public class FieldDefinitionService {
     public FieldDefinitionDto create(CreateFieldDefinitionRequest req) {
         validateRequired(req);
 
+        if (Boolean.TRUE.equals(req.getIsLlvar())
+                && Boolean.TRUE.equals(req.getIsLllvar())) {
+            throw new IllegalArgumentException(
+                    "Field cannot be both LLVAR and LLLVAR");
+        }
         if (fieldDefinitionRepository.existsByProfileIdAndMtiAndDeNumberAndDeletedAtIsNull(
                 req.getProfileId(), req.getMti(), req.getDeNumber())) {
             throw new IllegalStateException(
@@ -189,6 +194,17 @@ public class FieldDefinitionService {
     public FieldDefinitionDto update(Long id, UpdateFieldDefinitionRequest req) {
         FieldDefinition fd = findOrThrow(id);
         String before = toJson(fd);
+        Boolean llvar =
+                req.getIsLlvar() != null ? req.getIsLlvar() : fd.getIsLlvar();
+
+        Boolean lllvar =
+                req.getIsLllvar() != null ? req.getIsLllvar() : fd.getIsLllvar();
+
+        if (Boolean.TRUE.equals(llvar)
+                && Boolean.TRUE.equals(lllvar)) {
+            throw new IllegalArgumentException(
+                    "Field cannot be both LLVAR and LLLVAR");
+        }
 
         if (req.getFieldName() != null) fd.setFieldName(req.getFieldName());
         if (req.getDataType() != null) fd.setDataType(req.getDataType());
