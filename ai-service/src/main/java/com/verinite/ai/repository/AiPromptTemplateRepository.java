@@ -20,4 +20,6 @@ public interface AiPromptTemplateRepository extends JpaRepository<AiPromptTempla
 
     /** List templates by scope (GLOBAL or PROFILE). */
     List<AiPromptTemplate> findByScopeAndDeletedAtIsNull(TemplateScope scope);
+
+    Optional<AiPromptTemplate> findByScopeAndProfileId(TemplateScope scope, Long profileId);
 }
