@@ -29,13 +29,41 @@ public class AiTemplateService {
 
     // ── CRUD ────────────────────────────────────────────────────────────────
 
-    @Transactional
     public AiPromptTemplate create(AiPromptTemplate template, String createdBy) {
+
+        Optional<AiPromptTemplate> deleted = templateRepo
+                .findByScopeAndProfileId(template.getScope(), template.getProfileId())
+                .filter((t) -> t.getDeletedAt() != null);
+
+        if (deleted.isPresent()) {
+            AiPromptTemplate revived = deleted.get();
+            revived.setDeletedAt(null);
+            revived.setPromptTemplate(template.getPromptTemplate());
+            revived.setTemplateName(template.getTemplateName());
+            revived.setCurrentVersion(1);
+            revived.setActive(true);
+            revived.setUpdatedBy(createdBy);
+            AiPromptTemplate saved = templateRepo.save(revived);
+
+            versionRepo.save(AiPromptTemplateVersion.builder()
+                    .templateId(saved.getId())
+                    .versionNumber(1)
+                    .promptContent(saved.getPromptTemplate())
+                    .changeNote("Recreated after clear")
+                    .isCurrent(true)
+                    .createdBy(createdBy)
+                    .build());
+
+            log.info("[Template] Revived soft-deleted template id={} scope={} profileId={}",
+                    saved.getId(), saved.getScope(), saved.getProfileId());
+            return saved;
+        }
+
+
         template.setCreatedBy(createdBy);
         template.setCurrentVersion(1);
         AiPromptTemplate saved = templateRepo.save(template);
 
-        // Insert version row 1 as current
         versionRepo.save(AiPromptTemplateVersion.builder()
                 .templateId(saved.getId())
                 .versionNumber(1)
@@ -117,49 +145,35 @@ public class AiTemplateService {
      * Example: current=3 → find version 2 content → create version 4 with v2 content.
      */
     @Transactional
-    public AiPromptTemplate rollback(Long id, String updatedBy) {
+    public AiPromptTemplate rollback(Long id, Integer targetVersion, String updatedBy) {
         AiPromptTemplate existing = getById(id);
         int currentVersion = existing.getCurrentVersion();
 
-        if (currentVersion <= 1) {
-            throw new NotFoundException("No previous version to rollback to for template id=" + id);
+        if (targetVersion == null) targetVersion = currentVersion - 1;
+        if (targetVersion < 1 || targetVersion >= currentVersion) {
+            throw new IllegalArgumentException("Invalid rollback target version " + targetVersion + " (current is v" + currentVersion + ")");
         }
 
-        int targetVersion = currentVersion - 1;
-
-        // Get the content of the previous version
-        AiPromptTemplateVersion prevVersion = versionRepo
+        Integer finalTargetVersion = targetVersion;
+        AiPromptTemplateVersion targetVersionRow = versionRepo
                 .findByTemplateIdAndVersionNumber(id, targetVersion)
-                .orElseThrow(() -> new NotFoundException(
-                        "Version " + targetVersion + " not found for template id=" + id));
+                .orElseThrow(() -> new NotFoundException("Version " + finalTargetVersion + " not found for template id=" + id));
 
         int newVersion = currentVersion + 1;
 
-        // Mark the current version as not-current
-        versionRepo.findByTemplateIdAndIsCurrentTrue(id).ifPresent(v -> {
-            v.setIsCurrent(false);
-            versionRepo.save(v);
-        });
+        versionRepo.findByTemplateIdAndIsCurrentTrue(id).ifPresent(v -> { v.setIsCurrent(false); versionRepo.save(v); });
 
-        // Create new version with old content (history-preserving rollback)
         versionRepo.save(AiPromptTemplateVersion.builder()
-                .templateId(id)
-                .versionNumber(newVersion)
-                .promptContent(prevVersion.getPromptContent())
-                .changeNote("Rolled back to v" + targetVersion + " (now v" + newVersion + ")")
-                .isCurrent(true)
-                .createdBy(updatedBy)
-                .build());
+                .templateId(id).versionNumber(newVersion)
+                .promptContent(targetVersionRow.getPromptContent())
+                .changeNote("Rolled back to v" + targetVersion + " (now v" + newVersion + ")") // now correct
+                .isCurrent(true).createdBy(updatedBy).build());
 
-        // Update main template with the restored content
-        existing.setPromptTemplate(prevVersion.getPromptContent());
+        existing.setPromptTemplate(targetVersionRow.getPromptContent());
         existing.setCurrentVersion(newVersion);
         existing.setUpdatedBy(updatedBy);
 
-        AiPromptTemplate saved = templateRepo.save(existing);
-        log.info("[Template] Rolled back id={} from v{} to v{} (new v{})",
-                id, currentVersion, targetVersion, newVersion);
-        return saved;
+        return templateRepo.save(existing);
     }
 
     public List<AiPromptTemplateVersion> getVersionHistory(Long id) {
