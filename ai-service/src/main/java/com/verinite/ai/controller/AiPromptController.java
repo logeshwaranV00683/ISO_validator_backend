@@ -62,15 +62,13 @@ public class AiPromptController {
     @PutMapping("/profile/{profileId}")
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
     public ResponseEntity<ApiResponse<AiPromptTemplate>> upsertProfile(
-            @PathVariable Long profileId,
-            @RequestBody AiPromptTemplate body,
-            Authentication auth) {
+            @PathVariable Long profileId, @RequestBody AiPromptTemplate body, Authentication auth) {
         String username = auth != null ? auth.getName() : "system";
         body.setScope(TemplateScope.PROFILE);
         body.setProfileId(profileId);
         // Ensure templateName is set for new inserts (NOT NULL constraint)
         if (body.getTemplateName() == null || body.getTemplateName().isBlank()) {
-            body.setTemplateName("profile-" + profileId);
+            throw new IllegalArgumentException("Template cannot be empty.");
         }
         return templateService.getByScope(TemplateScope.PROFILE).stream()
                 .filter(t -> profileId.equals(t.getProfileId()))
@@ -113,6 +111,6 @@ public class AiPromptController {
         String username = auth != null ? auth.getName() : "system";
         // AiTemplateService.rollback() rolls back to previousVersion
         return ResponseEntity.ok(ApiResponse.success(
-                templateService.rollback(templateId, username), "Rolled back"));
+                templateService.rollback(templateId, version, username), "Rolled back"));
     }
 }

@@ -88,11 +88,11 @@ public class AiTemplateController {
     @PutMapping("/{id}/rollback")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AiPromptTemplate>> rollback(
-            @PathVariable Long id,
+            @PathVariable Long id, @RequestParam(required = false) Integer targetVersion,
             Authentication auth) {
 
         String username = auth != null ? auth.getName() : "system";
-        AiPromptTemplate rolled = templateService.rollback(id, username);
+        AiPromptTemplate rolled = templateService.rollback(id,targetVersion, username);
         auditPublisher.publishPromptChange(id, "PROMPT_ROLLBACK", username);
         log.info("[Template] Rolled back id={} by {}", id, username);
         return ResponseEntity.ok(
