@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -93,26 +94,34 @@ public class AiConfigController {
 
     @PostMapping("/ai/test")
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testPrompt(
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testPrompt(@RequestBody Map<String, Object> body) {
         try {
-            String mti = (String) body.getOrDefault("mti", "0200");
-            String sampleErrors = (String) body.getOrDefault("sampleErrors", "DE7 missing");
-            Integer profileId = (Integer) body.getOrDefault("profileId", 1);
+            String templateContent   = (String) body.get("templateContent");
+            String sampleMti         = (String) body.getOrDefault("sampleMti", "0200");
+            String sampleProfileName = (String) body.getOrDefault("sampleProfileName", "Sample Profile");
+            Object sampleErrorsRaw   = body.getOrDefault("sampleErrors", List.of());
 
-            String prompt = "You are an ISO 8583 payment message expert.\n" +
-                    "A validation was run on MTI " + mti + " for profile ID " + profileId + ".\n" +
-                    "The following errors were found:\n" + sampleErrors + "\n\n" +
-                    "For each error, explain:\n" +
-                    "1. What the field is\n" +
-                    "2. Why it is mandatory\n" +
-                    "3. How to fix it";
+            if (templateContent == null || templateContent.isBlank()) {
+                throw new IllegalArgumentException("templateContent is required to run a test");
+            }
 
+            String errorsText = sampleErrorsRaw instanceof List<?> l
+                    ? l.stream().map(String::valueOf).collect(Collectors.joining("\n"))
+                    : String.valueOf(sampleErrorsRaw);
+
+            String prompt = templateContent
+                    .replace("{mti}", sampleMti)
+                    .replace("{profile}", sampleProfileName)
+                    .replace("{errors}", errorsText);
+
+            long start = System.currentTimeMillis();
             String result = ollamaClient.callOllama(prompt);
+            long durationMs = System.currentTimeMillis() - start;
 
             return ResponseEntity.ok(ApiResponse.success(
-                    Map.of("result", result != null ? result : "No response",
-                            "model", ollamaClient.getModelName(),
+                    Map.of("response", result != null ? result : "No response",
+                            "modelUsed", ollamaClient.getModelName(),
+                            "durationMs", durationMs,
                             "status", "SUCCESS"),
                     "AI test complete"));
         } catch (Exception e) {
