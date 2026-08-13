@@ -129,7 +129,7 @@ public class AuthServiceImpl implements AuthService {
     public boolean validateToken(String jti) {
         return sessionRepository.findByJti(jti)
                 .map(s -> s.getRevokedAt() == null
-                        && s.getExpiresAt().isAfter(LocalDateTime.now()))
+                        && s.getExpiresAt().isAfter(LocalDateTime.now(ZoneOffset.UTC)))
                 .orElse(false);
     }
 
@@ -145,7 +145,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         sessionRepository.findByUserIdAndRevokedAtIsNull(userId).forEach(session -> {
-            session.setRevokedAt(LocalDateTime.now());
+            session.setRevokedAt(LocalDateTime.now(ZoneOffset.UTC));
             session.setRevokeReason("PASSWORD_CHANGE");
             sessionRepository.save(session);
         });
