@@ -13,5 +13,6 @@ public class UserDto {
     private String email;
     private String avatarInitials;
     private Role role;
+    private String createdBy;
     private boolean active;
 }
