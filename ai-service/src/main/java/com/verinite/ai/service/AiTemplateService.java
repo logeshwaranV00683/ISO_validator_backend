@@ -176,6 +176,22 @@ public class AiTemplateService {
         return templateRepo.save(existing);
     }
 
+    public boolean hasChanges(Long id, AiPromptTemplate updated) {
+        AiPromptTemplate existing = getById(id);
+        return isChanged(existing.getTemplateName(),   updated.getTemplateName())
+                || isChanged(existing.getScope(),          updated.getScope())
+                || isChanged(existing.getProfileId(),      updated.getProfileId())
+                || isChanged(existing.getProfileName(),    updated.getProfileName())
+                || isChanged(existing.getPromptTemplate(), updated.getPromptTemplate())
+                || isChanged(existing.getVariablesUsed(),  updated.getVariablesUsed())
+                || isChanged(existing.getActive(),         updated.getActive());
+    }
+
+    private boolean isChanged(Object existingValue, Object incomingValue) {
+        if (incomingValue == null) return false; // not supplied -> not a change
+        return !incomingValue.equals(existingValue);
+    }
+
     public List<AiPromptTemplateVersion> getVersionHistory(Long id) {
         getById(id); // validates the template exists and is not deleted
         return versionRepo.findByTemplateIdOrderByVersionNumberDesc(id);
