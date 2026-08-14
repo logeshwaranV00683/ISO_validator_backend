@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -41,8 +42,10 @@ public class AuthServiceImpl implements AuthService {
     private final LoginAttemptService loginAttemptService;
     private final SystemConfigService systemConfigService;
 
-    @Value("${jwt.expiry-minutes}")
-    private int expiryMinutes;
+//    @Value("${jwt.expiry-minutes}")
+//    private int expiryMinutes;
+
+    private static final int DEFAULT_EXPIRY_MINUTES = 60;
 
     @Override
     @Transactional
@@ -54,7 +57,12 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getLockedUntil() != null
                 && user.getLockedUntil().isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
-            throw new RuntimeException("Account locked until " + user.getLockedUntil());
+            long secondsLeft = java.time.Duration.between(
+                    LocalDateTime.now(ZoneOffset.UTC), user.getLockedUntil()).getSeconds();
+            long minutesLeft = Math.max(1, (secondsLeft + 59) / 60); // round up, minimum 1
+            throw new RuntimeException(
+                    "Account locked. Try again in " + minutesLeft +
+                            (minutesLeft == 1 ? " minute." : " minutes."));
         }
 
         if (!user.isActive()) {
@@ -62,9 +70,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-
-            int maxFailures = systemConfigService.getInt("max_login_failures", AuthConstants.MAX_FAILURES);
-            int lockMinutes = systemConfigService.getInt("account_lock_minutes", AuthConstants.LOCK_MINUTES);
+            int maxFailures = systemConfigService.getInt("login.max.failures",   AuthConstants.MAX_FAILURES);
+            int lockMinutes = systemConfigService.getInt("account.lock.minutes", AuthConstants.LOCK_MINUTES);
             int newCount    = user.getFailedLoginCount() + 1;
 
             loginAttemptService.recordFailedAttempt(user.getId());
@@ -84,15 +91,21 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginIp(ipAddress);
         userRepository.save(user);
 
+        enforceSessionLimit(user.getId());
+
         String jti       = UUID.randomUUID().toString();
         Date   issuedAt  = new Date();
+//        Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
+        int expiryMinutes = systemConfigService.getInt("jwt.expiry.minutes", DEFAULT_EXPIRY_MINUTES);
         Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
 
         String token = Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("username", user.getUsername())
                 .claim("role", user.getRole().name())
+                .issuer(systemConfigService.getString("jwt.issuer", "iso8583-validator"))
                 .id(jti)
+
                 .issuedAt(issuedAt)
                 .expiration(expiresAt)
                 .signWith(jwtPrivateKey)
@@ -179,12 +192,14 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse refreshToken(User user, String ipAddress, String userAgent) {
         String jti       = UUID.randomUUID().toString();
         Date   issuedAt  = new Date();
+//        Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
+        int expiryMinutes = systemConfigService.getInt("jwt.expiry.minutes", DEFAULT_EXPIRY_MINUTES);
         Date   expiresAt = new Date(issuedAt.getTime() + ((long) expiryMinutes * 60 * 1000));
-
         String token = Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("username", user.getUsername())
                 .claim("role", user.getRole().name())
+                .issuer(systemConfigService.getString("jwt.issuer", "iso8583-validator"))
                 .id(jti)
                 .issuedAt(issuedAt)
                 .expiration(expiresAt)
@@ -217,7 +232,26 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    private void enforceSessionLimit(Long userId) {
+        int maxSessions = systemConfigService.getInt("login.session.max", AuthConstants.MAX_SESSIONS);
+
+        List<UserSession> activeSessions =
+                sessionRepository.findByUserIdAndRevokedAtIsNullOrderByIssuedAtAsc(userId);
+
+        // If already at/above the cap, evict the oldest sessions until there's room for the new one
+        int toEvict = activeSessions.size() - maxSessions + 1;
+        for (int i = 0; i < toEvict && i < activeSessions.size(); i++) {
+            UserSession oldest = activeSessions.get(i);
+            oldest.setRevokedAt(LocalDateTime.now(ZoneOffset.UTC));
+            oldest.setRevokeReason("SESSION_LIMIT_EXCEEDED");
+            oldest.setIsActive(false);
+            sessionRepository.save(oldest);
+            log.info("Session evicted (limit={}): userId={} jti={}", maxSessions, userId, oldest.getJti());
+        }
+    }
+
     private String sha256(String input) {
+
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));

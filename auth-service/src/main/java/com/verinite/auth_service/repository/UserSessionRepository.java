@@ -12,6 +12,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
 
     List<UserSession> findByUserIdAndRevokedAtIsNull(Long userId);
 
-    /** For session list endpoint — includes revoked sessions too */
+    List<UserSession> findByUserIdAndRevokedAtIsNullOrderByIssuedAtAsc(Long userId);
+
+
     List<UserSession> findByUserIdOrderByIssuedAtDesc(Long userId);
 }
