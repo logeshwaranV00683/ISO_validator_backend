@@ -56,10 +56,12 @@ public class AiPromptController {
     @GetMapping("/profile/{profileId}")
     public ResponseEntity<ApiResponse<AiPromptTemplate>> getByProfile(
             @PathVariable Long profileId) {
-        AiPromptTemplate t = templateService.getByScope(TemplateScope.PROFILE)
-                .stream()
-                .filter(tmpl -> profileId.equals(tmpl.getProfileId()))
-                .findFirst()
+        // Deliberately includes soft-deleted (cleared) templates — the FE needs the
+        // template's id to keep "Version History" reachable after Clear (history rows
+        // are intentionally preserved through a soft-delete; see AiTemplateService).
+        // The FE distinguishes "cleared" from "active override" via deletedAt.
+        AiPromptTemplate t = templateService
+                .getByScopeAndProfileIdIncludingDeleted(TemplateScope.PROFILE, profileId)
                 .orElse(null);
         return ResponseEntity.ok(ApiResponse.success(t, "OK"));
     }
@@ -85,7 +87,9 @@ public class AiPromptController {
                             templateService.update(existing.getId(), body, username), "Updated"));
                 })
                 .orElseGet(() -> {
-
+                    // Ensure templateName is set for new inserts (NOT NULL constraint) —
+                    // only applied here, not on the update branch above, so it never makes
+                    // an otherwise-unchanged update look like a change.
                     if (body.getTemplateName() == null || body.getTemplateName().isBlank()) {
                         body.setTemplateName("Profile Override - " + profileId);
                     }
