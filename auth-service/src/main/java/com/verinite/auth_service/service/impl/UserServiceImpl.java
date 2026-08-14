@@ -145,6 +145,7 @@ public class UserServiceImpl implements UserService {
                 .avatarInitials(user.getAvatarInitials())
                 .role(user.getRole())
                 .active(user.isActive())
+                .createdBy(user.getCreatedBy())   // which admin created this user (JPA Auditing)
                 .build();
     }
 }
