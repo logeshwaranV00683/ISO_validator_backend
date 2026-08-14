@@ -40,7 +40,13 @@ public class AiTemplateService {
         if (deleted.isPresent()) {
             AiPromptTemplate revived = deleted.get();
 
-
+            // IMPORTANT: soft-delete never removes the old version-history rows for this
+            // template (by design, so the audit trail survives a Clear). That means
+            // version_number 1 (and possibly more) already exists in ai_prompt_template_versions
+            // for this templateId — resetting to versionNumber(1) here would violate the
+            // uk_aptv_template_version unique constraint (template_id, version_number) and
+            // blow up with a 500 on every "Save after Clear". Continue the version lineage
+            // instead of resetting it.
             int nextVersion = versionRepo.findByTemplateIdOrderByVersionNumberDesc(revived.getId())
                     .stream()
                     .findFirst()
@@ -102,10 +108,20 @@ public class AiTemplateService {
         return templateRepo.findByScopeAndDeletedAtIsNull(scope);
     }
 
+
+    public Optional<AiPromptTemplate> findByScopeAndProfileIdIncludingDeleted(TemplateScope scope, Long profileId) {
+        return templateRepo.findByScopeAndProfileId(scope, profileId);
+    }
+
     public AiPromptTemplate getById(Long id) {
         return templateRepo.findById(id)
                 .filter(t -> t.getDeletedAt() == null)
                 .orElseThrow(() -> new NotFoundException("Template not found: " + id));
+    }
+
+
+    public Optional<AiPromptTemplate> getByScopeAndProfileIdIncludingDeleted(TemplateScope scope, Long profileId) {
+        return templateRepo.findByScopeAndProfileId(scope, profileId);
     }
 
     /**
@@ -199,7 +215,15 @@ public class AiTemplateService {
         return templateRepo.save(existing);
     }
 
-
+    /**
+     * Determines whether an incoming update actually differs from what is currently
+     * persisted for the template, using the same partial-update semantics as update():
+     * a null field on the incoming request means "not supplied" and is never treated
+     * as a change (since update() would leave that field untouched anyway).
+     *
+     * Used to prevent no-op saves from bumping the version / inserting a redundant
+     * version-history row (e.g. clicking "Save" in AI Settings without editing anything).
+     */
     public boolean hasChanges(Long id, AiPromptTemplate updated) {
         AiPromptTemplate existing = getById(id);
         return isChanged(existing.getTemplateName(),   updated.getTemplateName())
@@ -216,7 +240,12 @@ public class AiTemplateService {
         return !incomingValue.equals(existingValue);
     }
 
-
+    /**
+     * Rejects blank/whitespace-only prompt content. An empty override is NOT the same
+     * as "no override" — clearing a profile override has its own explicit action
+     * (DELETE /ai/prompts/profile/{id}), so a blank Save must be rejected rather than
+     * silently persisted or treated as a fallback-to-global signal.
+     */
     private void validatePromptContent(String promptTemplate) {
         if (promptTemplate == null || promptTemplate.isBlank()) {
             throw new IllegalArgumentException("Template cannot be empty.");
@@ -224,7 +253,13 @@ public class AiTemplateService {
     }
 
     public List<AiPromptTemplateVersion> getVersionHistory(Long id) {
-        getById(id); // validates the template exists and is not deleted
+        // Deliberately NOT using getById() here — that filters out soft-deleted templates,
+        // which would make version history unreachable for a "cleared" profile override
+        // even though the version rows themselves are intentionally preserved (see create()'s
+        // revival logic). Version history should stay viewable regardless of delete status;
+        // only truly non-existent ids should 404.
+        templateRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Template not found: " + id));
         return versionRepo.findByTemplateIdOrderByVersionNumberDesc(id);
     }
 
