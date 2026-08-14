@@ -42,6 +42,12 @@ public class AiPromptController {
         AiPromptTemplate existing = templateService.getByScope(TemplateScope.GLOBAL)
                 .stream().findFirst()
                 .orElseThrow(() -> new RuntimeException("Global template not found"));
+
+        if (!templateService.hasChanges(existing.getId(), body)) {
+            return ResponseEntity.ok(ApiResponse.success(existing,
+                    "No changes detected — template is unchanged, still v" + existing.getCurrentVersion()));
+        }
+
         return ResponseEntity.ok(ApiResponse.success(
                 templateService.update(existing.getId(), body, username), "Updated"));
     }
@@ -73,8 +79,14 @@ public class AiPromptController {
         return templateService.getByScope(TemplateScope.PROFILE).stream()
                 .filter(t -> profileId.equals(t.getProfileId()))
                 .findFirst()
-                .map(existing -> ResponseEntity.ok(ApiResponse.success(
-                        templateService.update(existing.getId(), body, username), "Updated")))
+                .map(existing -> {
+                    if (!templateService.hasChanges(existing.getId(), body)) {
+                        return ResponseEntity.ok(ApiResponse.success(existing,
+                                "No changes detected — template is unchanged, still v" + existing.getCurrentVersion()));
+                    }
+                    return ResponseEntity.ok(ApiResponse.success(
+                            templateService.update(existing.getId(), body, username), "Updated"));
+                })
                 .orElseGet(() -> ResponseEntity.status(201).body(ApiResponse.success(
                         templateService.create(body, username), "Created")));
     }
