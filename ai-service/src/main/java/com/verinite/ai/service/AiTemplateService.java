@@ -31,6 +31,8 @@ public class AiTemplateService {
 
     public AiPromptTemplate create(AiPromptTemplate template, String createdBy) {
 
+        validatePromptContent(template.getPromptTemplate());
+
         Optional<AiPromptTemplate> deleted = templateRepo
                 .findByScopeAndProfileId(template.getScope(), template.getProfileId())
                 .filter((t) -> t.getDeletedAt() != null);
@@ -101,6 +103,13 @@ public class AiTemplateService {
     @Transactional
     public AiPromptTemplate update(Long id, AiPromptTemplate updated, String updatedBy) {
         AiPromptTemplate existing = getById(id);
+
+        // Only validate when content is actually being changed — a null promptTemplate
+        // means "not supplied", so the existing (already-valid) content is kept as-is.
+        if (updated.getPromptTemplate() != null) {
+            validatePromptContent(updated.getPromptTemplate());
+        }
+
         int newVersion = existing.getCurrentVersion() + 1;
 
         // Mark previous current version as not-current
@@ -176,6 +185,7 @@ public class AiTemplateService {
         return templateRepo.save(existing);
     }
 
+
     public boolean hasChanges(Long id, AiPromptTemplate updated) {
         AiPromptTemplate existing = getById(id);
         return isChanged(existing.getTemplateName(),   updated.getTemplateName())
@@ -190,6 +200,13 @@ public class AiTemplateService {
     private boolean isChanged(Object existingValue, Object incomingValue) {
         if (incomingValue == null) return false; // not supplied -> not a change
         return !incomingValue.equals(existingValue);
+    }
+
+
+    private void validatePromptContent(String promptTemplate) {
+        if (promptTemplate == null || promptTemplate.isBlank()) {
+            throw new IllegalArgumentException("Template cannot be empty.");
+        }
     }
 
     public List<AiPromptTemplateVersion> getVersionHistory(Long id) {
