@@ -100,6 +100,8 @@ public class AiConfigController {
             String sampleMti         = (String) body.getOrDefault("sampleMti", "0200");
             String sampleProfileName = (String) body.getOrDefault("sampleProfileName", "Sample Profile");
             Object sampleErrorsRaw   = body.getOrDefault("sampleErrors", List.of());
+            Object sampleFieldsRaw   = body.getOrDefault("sampleFields",
+                    List.of("DE2 (PAN): 411111******1111", "DE3 (Processing Code): 000000", "DE4 (Amount): 000000010000"));
 
             if (templateContent == null || templateContent.isBlank()) {
                 throw new IllegalArgumentException("templateContent is required to run a test");
@@ -109,9 +111,14 @@ public class AiConfigController {
                     ? l.stream().map(String::valueOf).collect(Collectors.joining("\n"))
                     : String.valueOf(sampleErrorsRaw);
 
+            String fieldsText = sampleFieldsRaw instanceof List<?> l
+                    ? l.stream().map(String::valueOf).collect(Collectors.joining("\n"))
+                    : String.valueOf(sampleFieldsRaw);
+
             String prompt = templateContent
                     .replace("{mti}", sampleMti)
                     .replace("{profile}", sampleProfileName)
+                    .replace("{fields}", fieldsText)
                     .replace("{errors}", errorsText);
 
             long start = System.currentTimeMillis();
@@ -119,14 +126,21 @@ public class AiConfigController {
             long durationMs = System.currentTimeMillis() - start;
 
             return ResponseEntity.ok(ApiResponse.success(
-                    Map.of("response", result != null ? result : "No response",
+                    Map.of("response", result != null && !result.isBlank() ? result : "(Ollama returned an empty response)",
                             "modelUsed", ollamaClient.getModelName(),
                             "durationMs", durationMs,
                             "status", "SUCCESS"),
                     "AI test complete"));
         } catch (Exception e) {
-            return ResponseEntity.ok(ApiResponse.success(
-                    Map.of("error", e.getMessage(), "status", "FAILED"), "AI test failed"));
+            log.warn("[AI] Test prompt failed: {}", e.getMessage(), e);
+
+            Map<String, Object> failure = new java.util.HashMap<>();
+            failure.put("response", null);
+            failure.put("modelUsed", ollamaClient.getModelName());
+            failure.put("durationMs", 0L);
+            failure.put("status", "FAILED");
+            failure.put("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            return ResponseEntity.ok(ApiResponse.success(failure, "AI test failed"));
         }
     }
 }
