@@ -39,25 +39,39 @@ public class AiTemplateService {
 
         if (deleted.isPresent()) {
             AiPromptTemplate revived = deleted.get();
+
+
+            int nextVersion = versionRepo.findByTemplateIdOrderByVersionNumberDesc(revived.getId())
+                    .stream()
+                    .findFirst()
+                    .map(AiPromptTemplateVersion::getVersionNumber)
+                    .orElse(0) + 1;
+
+            // Only one row should ever be flagged current for a given template.
+            versionRepo.findByTemplateIdAndIsCurrentTrue(revived.getId()).ifPresent(v -> {
+                v.setIsCurrent(false);
+                versionRepo.save(v);
+            });
+
             revived.setDeletedAt(null);
             revived.setPromptTemplate(template.getPromptTemplate());
             revived.setTemplateName(template.getTemplateName());
-            revived.setCurrentVersion(1);
+            revived.setCurrentVersion(nextVersion);
             revived.setActive(true);
             revived.setUpdatedBy(createdBy);
             AiPromptTemplate saved = templateRepo.save(revived);
 
             versionRepo.save(AiPromptTemplateVersion.builder()
                     .templateId(saved.getId())
-                    .versionNumber(1)
+                    .versionNumber(nextVersion)
                     .promptContent(saved.getPromptTemplate())
                     .changeNote("Recreated after clear")
                     .isCurrent(true)
                     .createdBy(createdBy)
                     .build());
 
-            log.info("[Template] Revived soft-deleted template id={} scope={} profileId={}",
-                    saved.getId(), saved.getScope(), saved.getProfileId());
+            log.info("[Template] Revived soft-deleted template id={} scope={} profileId={} newVersion={}",
+                    saved.getId(), saved.getScope(), saved.getProfileId(), nextVersion);
             return saved;
         }
 
