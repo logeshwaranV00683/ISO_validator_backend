@@ -78,6 +78,14 @@ public class AiTemplateController {
             Authentication auth) {
 
         String username = auth != null ? auth.getName() : "system";
+
+        if (!templateService.hasChanges(id, template)) {
+            AiPromptTemplate unchanged = templateService.getById(id);
+            log.info("[Template] No-op save id={} — content unchanged, staying on v{}", id, unchanged.getCurrentVersion());
+            return ResponseEntity.ok(ApiResponse.success(unchanged,
+                    "No changes detected — template is unchanged, still v" + unchanged.getCurrentVersion()));
+        }
+
         AiPromptTemplate updated = templateService.update(id, template, username);
         auditPublisher.publishPromptChange(id, "UPDATE", username);
         return ResponseEntity.ok(ApiResponse.success(updated, "Template updated"));
