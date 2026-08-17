@@ -6,4 +6,5 @@ public final class AuthConstants {
 
     public static final int MAX_FAILURES = 5;
     public static final int LOCK_MINUTES = 15;
+    public static final int MAX_SESSIONS = 3;
 }
