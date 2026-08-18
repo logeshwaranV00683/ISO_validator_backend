@@ -33,6 +33,14 @@ public class OllamaClient {
      */
     @SuppressWarnings("unchecked")
     public String callOllama(String prompt) {
+        return callOllamaInternal(prompt, false);
+    }
+    public String callOllamaJson(String prompt) {
+        return callOllamaInternal(prompt, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callOllamaInternal(String prompt, boolean jsonMode) {
         // Config: http://localhost:11434/api/generate  ← full URL already
         String endpoint = getConfig("ollama.host")+"/api/generate";
         String model    = getConfig("ollama.model");
@@ -41,6 +49,9 @@ public class OllamaClient {
         request.put("model",  model);
         request.put("prompt", prompt);
         request.put("stream", false);
+        if (jsonMode) {
+            request.put("format", "json");
+        }
 
         // Respect temperature and max_tokens from DB config
         try {
