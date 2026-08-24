@@ -17,6 +17,7 @@ public class BrdDocumentDto {
     private String originalFilename;
     private String contentType;
     private String status;
+    private int progressPercent;
     private Double confidence;
     private List<String> warnings;
     private String uploadedBy;
@@ -24,8 +25,6 @@ public class BrdDocumentDto {
     private LocalDateTime confirmedAt;
     private LocalDateTime createdAt;
     private String errorMessage;
-
-    // Populated only on the /confirm response — drives the frontend "success" step.
     private Long profileId;
     private String profileName;
     private Integer fieldDefinitionsImported;
