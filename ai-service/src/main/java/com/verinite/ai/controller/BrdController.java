@@ -204,6 +204,7 @@ public class BrdController {
                 .originalFilename(d.getOriginalFilename())
                 .contentType(d.getContentType())
                 .status(d.getStatus() != null ? d.getStatus().name() : null)
+                .progressPercent(d.getProgressPercent())
                 .confidence(confidence)
                 .warnings(warnings)
                 .uploadedBy(d.getUploadedBy())
