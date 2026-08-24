@@ -34,6 +34,9 @@ public class BrdDocument {
     @Column(name = "status", nullable = false)
     @Builder.Default
     private BrdExtractStatus status = BrdExtractStatus.PENDING;
+    @Column(name = "progress_percent", nullable = false)
+    @Builder.Default
+    private int progressPercent = 0;
 
     @Column(name = "extracted_json", columnDefinition = "LONGTEXT")
     private String extractedJson;
