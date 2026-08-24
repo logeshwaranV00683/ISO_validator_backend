@@ -46,7 +46,7 @@ public class UserController {
     public ResponseEntity<ApiResponse<Page<UserDto>>> getUsers(
             @RequestParam(required = false)          String role,
             @RequestParam(defaultValue = "0")        int    page,
-            @RequestParam(defaultValue = "20")       int    size,
+            @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "username") String sortBy,
             @RequestParam(defaultValue = "asc")      String sortDir) {
 
