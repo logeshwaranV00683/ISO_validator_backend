@@ -1,5 +1,4 @@
 package com.verinite.history.controller;
-
 import com.verinite.history.dto.response.ApiResponse;
 import com.verinite.common.dto.HistoryDetailDTO;
 import com.verinite.history.dto.response.HistorySummaryDTO;
@@ -39,10 +38,9 @@ public class HistoryController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0")         int    page,
-            @RequestParam(defaultValue = "20")        int    size,
+            @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc")      String sortDir) {
-
         Page<HistorySummaryDTO> result = historyService.listRuns(
                 profileId, mti, status, userId, responseCode, search,
                 fromDate, toDate, page, size, sortBy, sortDir);
