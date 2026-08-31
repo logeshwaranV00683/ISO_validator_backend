@@ -12,5 +12,6 @@ public class ProfileFormatResponseDto {
     private String xmlContent;
     private String mti;
     private Long   profileId;
-    private String profileName;   // added — populated by profile-service
+    private String profileName;
+    private String environment;
 }

@@ -42,6 +42,32 @@ public class ValidationServiceImpl implements ValidationService {
             "0810", "Network Management Response"
     );
 
+    private static final Map<String, String> RESPONSE_CODE_LABELS = Map.ofEntries(
+            Map.entry("00", "Approved"),
+            Map.entry("01", "Refer to Card Issuer"),
+            Map.entry("03", "Invalid Merchant"),
+            Map.entry("04", "Pick Up Card"),
+            Map.entry("05", "Do Not Honor"),
+            Map.entry("12", "Invalid Transaction"),
+            Map.entry("13", "Invalid Amount"),
+            Map.entry("14", "Invalid Card Number"),
+            Map.entry("30", "Format Error"),
+            Map.entry("41", "Lost Card"),
+            Map.entry("43", "Stolen Card"),
+            Map.entry("51", "Insufficient Funds"),
+            Map.entry("54", "Expired Card"),
+            Map.entry("55", "Incorrect PIN"),
+            Map.entry("57", "Transaction Not Permitted to Cardholder"),
+            Map.entry("58", "Transaction Not Permitted to Terminal"),
+            Map.entry("61", "Exceeds Withdrawal Limit"),
+            Map.entry("62", "Restricted Card"),
+            Map.entry("65", "Exceeds Withdrawal Frequency Limit"),
+            Map.entry("75", "PIN Tries Exceeded"),
+            Map.entry("82", "CVV Validation Error"),
+            Map.entry("91", "Issuer Unavailable"),
+            Map.entry("96", "System Malfunction")
+    );
+
     private final ValidationCacheService cacheService;
     private final PackagerCache          packagerCache;
     private final AIServiceClient        aiServiceClient;
@@ -97,7 +123,9 @@ public class ValidationServiceImpl implements ValidationService {
 
             ValidationRunEvent errorEvent = ValidationRunEvent.builder()
                     .runReference(runRef).status("PARSE_ERROR")
-                    .profileId(request.getProfileId()).mti("UNKNOWN")
+                    .profileId(request.getProfileId()).mti(null).mtiDescription("Unknown — message failed to parse")
+                    .profileNameSnapshot(profileFormat.getProfileName())
+                    .environment(profileFormat.getEnvironment())
                     .rawMessage(request.getRawMessage())
                     .userId(userId != null ? userId : "anonymous")
                     .correlationId(correlationId != null ? correlationId : "")
@@ -127,6 +155,7 @@ public class ValidationServiceImpl implements ValidationService {
                             .parseDurationMs(parseDurationMs)
                             .validationDurationMs(0L)
                             .aiDurationMs(0L)
+                            .otherDurationMs(Math.max(0,totalMs-parseDurationMs))
                             .totalDurationMs(totalMs)
                             .build())
                     .ai(AiResultDTO.builder()
@@ -213,6 +242,7 @@ public class ValidationServiceImpl implements ValidationService {
                 .runReference(runRef).status(status)
                 .profileId(request.getProfileId())
                 .profileNameSnapshot(profileFormat.getProfileName())
+                .environment(profileFormat.getEnvironment())
                 .formatId(profileFormat.getFormatId())
                 .mti(mti)
                 .mtiDescription(getMtiDescription(mti))
@@ -231,6 +261,7 @@ public class ValidationServiceImpl implements ValidationService {
                 .infoCount((int) infoCount)
                 .panMasked(panMasked)
                 .responseCode(responseCode)
+                .responseLabel(getResponseCodeLabel(responseCode))
                 .currencyCode(currencyCode)
                 .merchantName(merchantName)
                 .terminalId(terminalId)
@@ -274,6 +305,7 @@ public class ValidationServiceImpl implements ValidationService {
                 .parseDurationMs(parseDurationMs)
                 .validationDurationMs(validationDurationMs)
                 .aiDurationMs(aiDurationMs)
+                .otherDurationMs(Math.max(0, totalDurationMs - parseDurationMs - validationDurationMs - aiDurationMs))
                 .totalDurationMs(totalDurationMs)
                 .build();
 
@@ -468,10 +500,21 @@ public class ValidationServiceImpl implements ValidationService {
 
             HistoryDetailDTO run = response.getData();
 
+            if(run==null){
+                throw new RuntimeException("Run Not Found "+runReference);
+            }
+
+            String rawMessage=run.getRawMessage();
+
+            if(rawMessage==null || rawMessage.isBlank()){
+                throw new RuntimeException("Cannot rerun " + runReference
+                        + ": the original raw message was not stored for this run");
+            }
+
             ValidationRequest rerunRequest =
                     ValidationRequest.builder()
                             .profileId(run.getProfileId())
-                            .rawMessage(run.getRawMessage())
+                            .rawMessage(rawMessage)
                             .enableAi(Boolean.TRUE.equals(run.getAiEnabled()))
                             .isRerun(true)
                             .originalRunReference(runReference)
@@ -511,6 +554,11 @@ public class ValidationServiceImpl implements ValidationService {
         return MTI_DESC.getOrDefault(mti, mti + " – Unknown Message Type");
     }
 
+    private String getResponseCodeLabel(String responseCode){
+        if(responseCode==null||responseCode.isBlank()) return null;
+        return RESPONSE_CODE_LABELS.get(responseCode);
+    }
+
     private String determineStatus(List<ValidationErrorDTO> errors) {
         if (errors.isEmpty()) return "PASSED";
         boolean hasCritical = errors.stream()
@@ -539,13 +587,14 @@ public class ValidationServiceImpl implements ValidationService {
                     .errors(aiErrors).parsedFields(maskedFields).correlationId(correlationId)
                     .build();
 
-            com.verinite.common.dto.ApiResponse<String> resp = aiServiceClient.explain(req);
+            ApiResponse<AiExplainResponseDto> resp = aiServiceClient.explain(req);
             long durationMs = System.currentTimeMillis() - start;
 
-            if (resp != null && resp.getData() != null) {
+            if (resp != null && resp.getData() != null && resp.getData().getExplanation()!= null) {
                 return AiResultDTO.builder()
                         .enabled(true)
-                        .explanation(resp.getData())
+                        .explanation(resp.getData().getExplanation())
+                        .modelUsed(resp.getData().getModelUsed())
                         .durationMs(durationMs)
                         .skipped(false)
                         .build();

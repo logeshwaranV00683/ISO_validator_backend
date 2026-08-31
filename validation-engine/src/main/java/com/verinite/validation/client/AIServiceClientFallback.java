@@ -2,6 +2,7 @@ package com.verinite.validation.client;
 
 import com.verinite.common.dto.ApiResponse;
 import com.verinite.validation.dto.AiExplainRequestDto;
+import com.verinite.validation.dto.AiExplainResponseDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class AIServiceClientFallback implements AIServiceClient {
 
     @Override
-    public ApiResponse<String> explain(AiExplainRequestDto request) {
+    public ApiResponse<AiExplainResponseDto> explain(AiExplainRequestDto request) {
         log.warn("[AI Fallback] ai-service unreachable for runRef={} — explanation skipped",
                 request != null ? request.getRunReference() : "UNKNOWN");
         return ApiResponse.success(null, "AI service unavailable — skipped");

@@ -32,6 +32,7 @@ public class ValidationRunEvent {
     private String status;              // PASSED | FAILED | WARNED | PARSE_ERROR
     private Long   profileId;
     private String profileNameSnapshot;
+    private String environment;
     private Long   formatId;
     private String formatNameSnapshot;
     private String userId;

@@ -25,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class HistoryService {
 
-    private final ValidationRunRepository      runRepository;
+    private final ValidationRunRepository runRepository;
     private final ValidationRunFieldRepository fieldRepository;
     private final ValidationRunErrorRepository errorRepository;
 
@@ -33,7 +33,7 @@ public class HistoryService {
      * Paginated run list with all supported filters.
      */
     public Page<HistorySummaryDTO> listRuns(
-            Long profileId, String mti, String status, Long userId,
+            Long profileId, String mti, String status, Long authUserId,
             String responseCode, String search,
             LocalDate dateFrom, LocalDate dateTo,
             int page, int size, String sortBy, String sortDir) {
@@ -50,7 +50,7 @@ public class HistoryService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Specification<ValidationRun> spec = ValidationRunSpec.filter(
-                profileId, userId, status, mti,
+                profileId, authUserId, status, mti,
                 dateFrom, dateTo, search);
 
         return runRepository.findAll(spec, pageable)
@@ -61,9 +61,12 @@ public class HistoryService {
      * Full run detail: parsed fields + errors + aiExplanation.
      * run_id is NEVER exposed — only runReference crosses service boundaries.
      */
-    public HistoryDetailDTO getByRunReference(String runReference) {
+    public HistoryDetailDTO getByRunReference(String runReference,Long authUserId) {
         ValidationRun run = runRepository.findByRunReference(runReference)
                 .orElseThrow(() -> new NotFoundException("Run not found: " + runReference));
+
+        assertOwnedBy(run, authUserId);
+
 
         List<ValidationRunField> fields = fieldRepository.findByRunId_Id(run.getId());
         List<ValidationRunError> errors = errorRepository.findByRunId_Id(run.getId());
@@ -71,10 +74,12 @@ public class HistoryService {
         return toDetail(run, fields, errors);
     }
 
-    /** Soft delete — sets deletedAt timestamp. */
-    public void softDelete(String runReference) {
+    public void softDelete(String runReference,Long authUserId) {
         ValidationRun run = runRepository.findByRunReference(runReference)
                 .orElseThrow(() -> new NotFoundException("Run not found: " + runReference));
+
+        assertOwnedBy(run, authUserId);
+
 
         if (run.getDeletedAt() != null) {
             throw new IllegalStateException("Run already deleted: " + runReference);
@@ -85,6 +90,40 @@ public class HistoryService {
         log.info("Soft deleted run: {}", runReference);
     }
 
+
+
+    public BulkDeleteResult bulkSoftDelete(List<String> runReferences, Long authUserId) {
+        int deleted = 0, skipped = 0;
+        for (String runReference : runReferences) {
+            ValidationRun run = runRepository.findByRunReference(runReference).orElse(null);
+            if (run == null || run.getDeletedAt() != null || !isOwnedBy(run, authUserId)) {
+                skipped++;
+                continue;
+            }
+            run.setDeletedAt(LocalDateTime.now());
+            runRepository.save(run);
+            deleted++;
+        }
+        log.info("Bulk soft delete by userId={}: deleted={} skipped={}", authUserId, deleted, skipped);
+        return new BulkDeleteResult(deleted, skipped);
+    }
+
+    public record BulkDeleteResult(int deletedCount, int skippedCount) {}
+
+    private boolean isOwnedBy(ValidationRun run, Long authUserId) {
+        // authUserId == null means auth headers weren't propagated (shouldn't happen
+        // behind the gateway) — fail closed rather than silently showing everything.
+        return authUserId != null && authUserId.equals(run.getUserId());
+    }
+
+    private void assertOwnedBy(ValidationRun run, Long authUserId) {
+        if (!isOwnedBy(run, authUserId)) {
+            throw new NotFoundException("Run not found: " + run.getRunReference());
+        }
+    }
+
+
+
     // ── Mappers ───────────────────────────────────────────────────────────────
 
     private HistorySummaryDTO toSummary(ValidationRun r) {
@@ -93,6 +132,7 @@ public class HistoryService {
                 .runReference(r.getRunReference())
                 .profileId(r.getProfileId())
                 .profileNameSnapshot(r.getProfileNameSnapshot())
+                .environment(r.getEnvironment())
                 .formatId(r.getFormatId())
                 .formatNameSnapshot(r.getFormatNameSnapshot())
                 .userId(r.getUserId())
@@ -111,6 +151,10 @@ public class HistoryService {
                 .panMasked(r.getPanMasked())
                 .transactionAmount(r.getTransactionAmount())
                 .currencyCode(r.getCurrencyCode())
+                .parseDurationMs(r.getParseDurationMs())
+                .validationDurationMs(r.getValidationDurationMs())
+                .aiDurationMs(r.getAiDurationMs())
+                .aiModelUsed(r.getAiModelUsed())
                 .totalDurationMs(r.getTotalDurationMs())
                 .aiEnabled(r.getAiEnabled())
                 .rawMessage(r.getRawMessage())
@@ -126,11 +170,13 @@ public class HistoryService {
                 .runReference(r.getRunReference())
                 .profileId(r.getProfileId())
                 .profileNameSnapshot(r.getProfileNameSnapshot())
+                .environment(r.getEnvironment())
                 .formatId(r.getFormatId())
                 .formatNameSnapshot(r.getFormatNameSnapshot())
                 .userId(r.getUserId())
                 .usernameSnapshot(r.getUsernameSnapshot())
                 .userRoleSnapshot(r.getUserRoleSnapshot())
+                .rawMessage(r.getRawMessage())
                 .mti(r.getMti())
                 .mtiDescription(r.getMtiDescription())
                 .bitmapPrimary(r.getBitmapPrimary())
@@ -188,7 +234,7 @@ public class HistoryService {
 
     public String exportRuns(Long profileId, String mti, String status, String format) {
         Specification<ValidationRun> spec = ValidationRunSpec.filter(
-                profileId, null, status, mti, null, null, null);
+                profileId, null,  status, mti, null, null, null);
         List<ValidationRun> runs = runRepository.findAll(spec);
 
         if ("csv".equalsIgnoreCase(format)) {

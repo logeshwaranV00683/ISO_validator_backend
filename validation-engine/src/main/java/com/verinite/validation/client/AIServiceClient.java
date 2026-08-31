@@ -2,6 +2,7 @@ package com.verinite.validation.client;
 
 import com.verinite.common.dto.ApiResponse;
 import com.verinite.validation.dto.AiExplainRequestDto;
+import com.verinite.validation.dto.AiExplainResponseDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,5 +14,5 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface AIServiceClient {
 
     @PostMapping("/internal/ai/explain")
-    ApiResponse<String> explain(@RequestBody AiExplainRequestDto request);
+    ApiResponse<AiExplainResponseDto> explain(@RequestBody AiExplainRequestDto request);
 }

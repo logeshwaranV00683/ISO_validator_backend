@@ -2,6 +2,7 @@ package com.verinite.ai.service;
 
 import com.verinite.ai.client.OllamaClient;
 import com.verinite.ai.dto.AiExplainRequest;
+import com.verinite.ai.dto.AiExplainResponse;
 import com.verinite.ai.dto.TemplateContext;
 import com.verinite.ai.entity.AiPromptTemplate;
 import com.verinite.ai.entity.AiRunLog;
@@ -29,7 +30,7 @@ public class OllamaService {
     private final AiRunLogService        aiRunLogService;
     private final OllamaConfigRepository ollamaConfigRepo;
 
-    public String getExplanation(AiExplainRequest request) {
+    public AiExplainResponse getExplanation(AiExplainRequest request) {
         String runRef = request.getRunReference() != null ? request.getRunReference() : "UNKNOWN";
 
         // ── 1. Global AI enabled check ──────────────────────────────────────
@@ -88,7 +89,7 @@ public class OllamaService {
      *  and skips the second log.
      */
     @CircuitBreaker(name = "ollama-cb", fallbackMethod = "ollamaFallback")
-    public String callWithCB(String prompt,
+    public AiExplainResponse callWithCB(String prompt,
                              String runRef,
                              Long   templateId,
                              TemplateScope scopeUsed,
@@ -127,7 +128,10 @@ public class OllamaService {
                     .correlationId(correlationId)
                     .build());
         }
-        return responseText;
+        return responseText!=null?AiExplainResponse.builder()
+                .explanation(responseText)
+                .modelUsed(ollamaClient.getModelName())
+                .build():null;
     }
 
     /**
@@ -135,7 +139,7 @@ public class OllamaService {
      * (a) CB is OPEN                  → t is CallNotPermittedException → log CB_OPEN
      * (b) callWithCB threw an error   → t is something else → already logged in finally; skip
      */
-    public String ollamaFallback(String prompt,
+    public AiExplainResponse ollamaFallback(String prompt,
                                  String runRef,
                                  Long   templateId,
                                  TemplateScope scopeUsed,

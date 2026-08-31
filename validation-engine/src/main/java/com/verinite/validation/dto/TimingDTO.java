@@ -9,5 +9,6 @@ public class TimingDTO {
     private long parseDurationMs;
     private long validationDurationMs;
     private long aiDurationMs;     // added (F10b)
+    private long otherDurationMs;
     private long totalDurationMs;
 }

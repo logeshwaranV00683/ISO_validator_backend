@@ -326,16 +326,19 @@ public class FormatService {
         // First active format wins; callers should ensure only one active format per profile
         MessageFormat format = active.get(0);
 
-        String profileName = profileRepo.findByIdAndDeletedAtIsNull(profileId)
-                .map(SwitchProfile::getProfileName)
-                .orElse(null);
+//        String profileName = profileRepo.findByIdAndDeletedAtIsNull(profileId)
+//                .map(SwitchProfile::getProfileName)
+//                .orElse(null);
+
+        SwitchProfile profile=profileRepo.findByIdAndDeletedAtIsNull(profileId).orElse(null);
 
         return ProfileFormatResponse.builder()
                 .formatId(format.getId())
                 .xmlContent(format.getXmlContent())
                 .mti(format.getMti())
                 .profileId(format.getProfileId())
-                .profileName(profileName)
+                .profileName(profile!=null?profile.getProfileName():null)
+                .environment(profile!=null?profile.getEnvironment().name():null)
                 .build();
     }
 

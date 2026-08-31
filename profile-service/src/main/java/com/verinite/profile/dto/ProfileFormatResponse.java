@@ -14,5 +14,7 @@ public class ProfileFormatResponse {
     private String xmlContent;
     private String mti;
     private Long   profileId;
-    private String profileName;   // added — needed by validation-engine for ValidationResponse.profile
+    private String profileName;
+    private String environment;
+
 }

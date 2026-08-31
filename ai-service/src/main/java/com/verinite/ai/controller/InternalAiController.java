@@ -1,6 +1,7 @@
 package com.verinite.ai.controller;
 
 import com.verinite.ai.dto.AiExplainRequest;
+import com.verinite.ai.dto.AiExplainResponse;
 import com.verinite.ai.dto.SuggestSwitchRequest;
 import com.verinite.ai.dto.SwitchSuggestionResponse;
 import com.verinite.ai.service.OllamaService;
@@ -30,10 +31,10 @@ public class InternalAiController {
     private final SwitchPredictorService switchPredictorService;
 
     @PostMapping("/explain")
-    public ResponseEntity<ApiResponse<String>> explain(
+    public ResponseEntity<ApiResponse<AiExplainResponse>> explain(
             @RequestBody AiExplainRequest request) {
         try {
-            String explanation = ollamaService.getExplanation(request);
+            AiExplainResponse explanation = ollamaService.getExplanation(request);
             return ResponseEntity.ok(ApiResponse.success(explanation, "OK"));
         } catch (Exception e) {
             // Safety net — ollamaService already handles all failures internally,

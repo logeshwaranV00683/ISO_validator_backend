@@ -25,6 +25,7 @@ public class ValidationController {
     public ResponseEntity<ApiResponse<ValidationResponse>> validate(
             @RequestBody @Valid ValidationRequest request,
             @RequestHeader(value = "X-Auth-User-Id",   required = false) String userId,
+            @RequestHeader(value = "X-Auth-Role", required = false) String userRole,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
 
         log.info("Validate profileId={} correlationId={}", request.getProfileId(), correlationId);
@@ -63,6 +64,7 @@ public class ValidationController {
     public ResponseEntity<ApiResponse<ValidationResponse>> rerun(
             @PathVariable String runReference,
             @RequestHeader(value = "X-Auth-User-Id",   required = false) String userId,
+            @RequestHeader(value = "X-Auth-Role", required = false) String userRole,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
 
         log.info("Rerun runReference={} by userId={}", runReference, userId);

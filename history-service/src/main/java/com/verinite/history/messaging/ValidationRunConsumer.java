@@ -53,6 +53,7 @@ public class ValidationRunConsumer {
                     .profileNameSnapshot((String) event.get("profileNameSnapshot"))
                     .formatId(toLong(event.get("formatId")))
                     .formatNameSnapshot((String) event.get("formatNameSnapshot"))
+                    .environment((String)event.get("environment"))
                     .userId(toLong(event.get("userId")))
                     .usernameSnapshot((String) event.get("usernameSnapshot"))
                     .userRoleSnapshot((String) event.get("userRoleSnapshot"))

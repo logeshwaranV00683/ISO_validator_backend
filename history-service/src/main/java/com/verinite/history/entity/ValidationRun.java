@@ -36,6 +36,9 @@ public class ValidationRun {
     @Column(name = "profile_name_snapshot", length = 100)
     private String profileNameSnapshot;
 
+    @Column(name = "environment",length = 100)
+    private String environment;
+
     @Column(name = "format_id")
     private Long formatId;
 

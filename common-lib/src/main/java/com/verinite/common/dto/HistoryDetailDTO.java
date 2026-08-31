@@ -19,6 +19,7 @@ public class HistoryDetailDTO {
     private String runReference;
     private Long profileId;
     private String profileNameSnapshot;
+    private String environment;
     private Long formatId;
     private String formatNameSnapshot;
     private Long userId;

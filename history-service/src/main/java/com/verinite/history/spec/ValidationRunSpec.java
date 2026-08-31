@@ -11,7 +11,8 @@ import java.util.List;
 
 public class ValidationRunSpec {
 
-    private ValidationRunSpec() {}
+    private ValidationRunSpec() {
+    }
 
     public static Specification<ValidationRun> filter(
             Long profileId, Long userId, String status,
