@@ -1,6 +1,5 @@
 package com.verinite.profile.service;
 
-import com.verinite.profile.client.RulesServiceClient;
 import com.verinite.profile.dto.*;
 import com.verinite.profile.entity.MessageFormat;
 import com.verinite.profile.entity.MessageFormatVersion;
@@ -10,7 +9,6 @@ import com.verinite.profile.event.FormatEventPublisher;
 import com.verinite.profile.repository.MessageFormatRepository;
 import com.verinite.profile.repository.MessageFormatVersionRepository;
 import com.verinite.profile.repository.SwitchProfileRepository;
-import com.verinite.profile.util.PackagerXmlFieldParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,8 +32,6 @@ public class FormatService {
     private final SwitchProfileRepository        profileRepo;
     private final FormatEventPublisher           formatEventPublisher;
     private final AuditEventPublisher            auditPublisher;
-    private final RulesServiceClient rulesServiceClient;
-    private final PackagerXmlFieldParser packagerXmlFieldParser;
 
     // ─────────────────────────────────────────────────────────────────────
     // CREATE
@@ -112,7 +108,6 @@ public class FormatService {
                 .build());
 
         log.info("Created format id={} profileId={} v1", saved.getId(), saved.getProfileId());
-        syncFieldDefinitionsAndRules(saved, req.getMti());
         return mapToDto(saved);
     }
 
@@ -123,10 +118,13 @@ public class FormatService {
     public FormatDto getById(Long id) {
         return mapToDto(findOrThrow(id));
     }
-
-    public List<FormatDto> getAll() {
-        return formatRepo.findAllByDeletedAtIsNull()
-                .stream().map(this::mapToDto).collect(Collectors.toList());
+    public List<FormatDto> getAll(boolean includeInactiveProfileFormats) {
+        return formatRepo.findAllByDeletedAtIsNull().stream()
+                .filter(f -> includeInactiveProfileFormats
+                        || f.getProfile() == null
+                        || Boolean.TRUE.equals(f.getProfile().getActive()))
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -177,10 +175,9 @@ public class FormatService {
 
             formatEventPublisher.publishFormatUpdated(format.getProfileId(), id);
             log.info("Updated XML for format id={}, new version={}", id, nextVer);
-            syncFieldDefinitionsAndRules(format, format.getMti());
         }
 
-        // Metadata — apply regardless of whether XML changed
+
         if (req.getFormatName()  != null) format.setFormatName(req.getFormatName());
         if (req.getIsoVersion()  != null) format.setIsoVersion(req.getIsoVersion());
         if (req.getEncoding()    != null) format.setEncoding(req.getEncoding());
@@ -209,7 +206,7 @@ public class FormatService {
     // ROLLBACK
     // ─────────────────────────────────────────────────────────────────────
 
-    /** PUT /formats/{id}/rollback — rolls back to currentVersion - 1 */
+
     @Transactional
     public FormatDto rollback(Long id, String username) {
         MessageFormat format = findOrThrow(id);
@@ -231,12 +228,7 @@ public class FormatService {
         return doRollback(format, target, username);
     }
 
-    /**
-     * Core rollback logic.
-     * Rollback is always FORWARD — it creates a new version (currentVersion + 1)
-     * whose content mirrors the target historical version.  The version history
-     * is therefore append-only and fully auditable.
-     */
+
     private FormatDto doRollback(MessageFormat format, int targetVersionNum, String username) {
         Long id = format.getId();
 
@@ -373,6 +365,7 @@ public class FormatService {
 
     @Transactional
     public void delete(Long id, String username) {
+        // FIX: was using findById — now correctly respects soft-delete via findOrThrow
         MessageFormat format = findOrThrow(id);
         format.setDeletedAt(LocalDateTime.now());
         format.setUpdatedBy(username);
@@ -388,34 +381,8 @@ public class FormatService {
                 .build());
 
         log.info("Soft-deleted format id={}", id);
-
-        // Clean up Rules Manager data — but only if no other active format
-        // still uses this same profileId+mti (formats aren't unique per mti).
-        cleanupRulesManagerData(format, id);
     }
 
-    private void cleanupRulesManagerData(MessageFormat format, Long deletedFormatId) {
-        String mti = normalizeMti(format.getMti());
-        if (mti == null) return; // format never had a valid mti to sync in the first place
-
-        boolean stillInUse = formatRepo.existsByProfileIdAndMtiAndIdNotAndDeletedAtIsNull(
-                format.getProfileId(), mti, deletedFormatId);
-        if (stillInUse) {
-            log.info("[Format Delete] Skipping rules-manager cleanup — another active format still uses profileId={} mti={}",
-                    format.getProfileId(), mti);
-            return;
-        }
-
-        try {
-            int fieldDefsDeleted = rulesServiceClient.deleteFieldDefinitionsForFormat(format.getProfileId(), mti);
-            int rulesDeleted     = rulesServiceClient.deleteRulesForFormat(format.getProfileId(), mti);
-            log.info("[Format Delete] Cleaned up rules-manager for profileId={} mti={} — fieldDefs={} rules={}",
-                    format.getProfileId(), mti, fieldDefsDeleted, rulesDeleted);
-        } catch (Exception e) {
-            log.error("[Format Delete] Rules-manager cleanup failed for profileId={} mti={}: {}",
-                    format.getProfileId(), mti, e.getMessage(), e);
-        }
-    }
     // ─────────────────────────────────────────────────────────────────────
     // XML VALIDATION (dry-run, no DB write)
     // ─────────────────────────────────────────────────────────────────────
@@ -500,106 +467,5 @@ public class FormatService {
             log.warn("SHA-256 unavailable — checksum not computed");
             return null;
         }
-    }
-
-
-    private void syncFieldDefinitionsAndRules(MessageFormat format, String mti) {
-        String normalizedMti = normalizeMti(mti);
-        if (normalizedMti == null) {
-            log.warn("[Format XML] Skipping rules-manager sync for formatId={} — missing/invalid MTI", format.getId());
-            return;
-        }
-
-        try {
-            List<PackagerXmlFieldParser.ParsedField> fields =
-                    packagerXmlFieldParser.parse(format.getXmlContent());
-
-            if (fields.isEmpty()) {
-                log.info("[Format XML] No data element fields found in XML for formatId={} — nothing to sync", format.getId());
-                return;
-            }
-
-            SwitchProfile profile = profileRepo.findByIdAndDeletedAtIsNull(format.getProfileId())
-                    .orElse(null);
-            String profileName = profile != null ? profile.getProfileName() : ("Profile " + format.getProfileId());
-
-            // Field Definitions
-            BulkImportFieldDefsRequest fieldDefsRequest = BulkImportFieldDefsRequest.builder()
-                    .profileId(format.getProfileId())
-                    .profileName(profileName)
-                    .mti(normalizedMti)
-                    .strategy("MERGE")
-                    .definitions(fields.stream()
-                            .map(f -> BulkImportFieldDefsRequest.FieldDefItem.builder()
-                                    .profileId(format.getProfileId())
-                                    .profileName(profileName)
-                                    .mti(normalizedMti)
-                                    .deNumber(f.getDeNumber())
-                                    .fieldName(f.getFieldName())
-                                    .dataType(packagerXmlFieldParser.resolveDataType(f.getIsoClass()))
-                                    .maxLength(f.getLength() != null ? f.getLength() : 1)
-                                    .isLlvar(packagerXmlFieldParser.isLlvar(f.getIsoClass()))
-                                    .isLllvar(packagerXmlFieldParser.isLllvar(f.getIsoClass()))
-                                    .isMandatory(false)
-                                    .displayOrder(Integer.parseInt(f.getDeNumber()))
-                                    .isBuilderVisible(true)
-                                    .isActive(true)
-                                    .description("Synced from format XML: " + format.getFormatName())
-                                    .build())
-                            .toList())
-                    .build();
-            BulkImportResultDto fieldDefsResult = rulesServiceClient.bulkImportFieldDefinitions(fieldDefsRequest);
-
-            // Rules — basic auto-generated rules: length + data type only, not mandatory, WARNING severity
-            BulkImportRulesRequest rulesRequest = BulkImportRulesRequest.builder()
-                    .profileId(format.getProfileId())
-                    .profileName(profileName)
-                    .mti(normalizedMti)
-                    .strategy("MERGE")
-                    .rules(fields.stream()
-                            .map(f -> BulkImportRulesRequest.RuleItem.builder()
-                                    .profileId(format.getProfileId())
-                                    .profileName(profileName)
-                                    .mti(normalizedMti)
-                                    .deNumber(f.getDeNumber())
-                                    .fieldName(f.getFieldName())
-                                    .isMandatory(false)
-                                    .maxLength(f.getLength() != null ? f.getLength() : 1)
-                                    .dataType(packagerXmlFieldParser.resolveDataType(f.getIsoClass()))
-                                    .severity("WARNING")
-                                    .priority(Integer.parseInt(f.getDeNumber()))
-                                    .isActive(true)
-                                    .description("Auto-generated from format XML: " + format.getFormatName())
-                                    .build())
-                            .toList())
-                    .build();
-            BulkImportResultDto rulesResult = rulesServiceClient.bulkImportRules(rulesRequest);
-
-            log.info("[Format XML] Synced formatId={} mti={} fields={} → fieldDefs(imported={},updated={}) rules(imported={},updated={})",
-                    format.getId(), normalizedMti, fields.size(),
-                    fieldDefsResult.getImported(), fieldDefsResult.getUpdated(),
-                    rulesResult.getImported(), rulesResult.getUpdated());
-
-        } catch (Exception e) {
-            log.error("[Format XML] Rules-manager sync failed for formatId={}: {}", format.getId(), e.getMessage(), e);
-            auditPublisher.publish(AuditEventPublisher.AuditEvent.builder()
-                    .action("SYNC_FAILED")
-                    .entityType("FORMAT")
-                    .entityId(format.getId())
-                    .entityName(format.getFormatName())
-                    .username(format.getUpdatedBy())
-                    .description("Rules-manager sync failed: " + e.getMessage())
-                    .build());
-        }
-    }
-
-    private String normalizeMti(String mti) {
-        if (mti == null) return null;
-        String trimmed = mti.trim();
-        return (trimmed.length() == 4 && trimmed.chars().allMatch(Character::isDigit)) ? trimmed : null;
-    }
-
-    public List<String> getMtisForProfile(Long profileId) {
-        return formatRepo.findDistinctMtisByProfileId(profileId);
     }
 }
