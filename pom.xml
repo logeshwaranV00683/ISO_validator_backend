@@ -35,7 +35,7 @@
         <spring-cloud.version>2024.0.1</spring-cloud.version>
         <jjwt.version>0.12.5</jjwt.version>
         <jpos.version>2.1.10</jpos.version>
-        <lombok.version>1.18.36</lombok.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>
