@@ -1,3 +1,4 @@
+
 package com.verinite.profile.controller;
 
 import com.verinite.common.dto.ApiResponse;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,8 +34,15 @@ public class ProfileController {
     public ResponseEntity<ApiResponse<List<ProfileDto>>> getAllProfiles(
             @RequestParam(required = false) String env,
             @RequestParam(required = false) Boolean isActive) {
+        Boolean effectiveIsActive = isAdmin() ? isActive : Boolean.TRUE;
         return ResponseEntity.ok(ApiResponse.success(
-                profileService.getAll(env, isActive), "Profiles fetched"));
+                profileService.getAll(env, effectiveIsActive), "Profiles fetched"));
+    }
+
+    private boolean isAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     @GetMapping("/{id}")
@@ -57,7 +66,6 @@ public class ProfileController {
         return ResponseEntity.ok(ApiResponse.success(null, "Profile deleted"));
     }
 
-    /** PATCH /profiles/{id}/status?active=true|false */
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> setStatus(
@@ -67,7 +75,7 @@ public class ProfileController {
                 active ? "Profile activated" : "Profile deactivated"));
     }
 
-    /** PATCH /profiles/{id}/default — sets this profile as the default */
+
     @PatchMapping("/{id}/default")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> setDefault(@PathVariable Long id,@RequestParam String username) {
@@ -75,14 +83,12 @@ public class ProfileController {
         return ResponseEntity.ok(ApiResponse.success(null, "Default profile set"));
     }
 
-    /** POST /profiles/{id}/test-connection — TCP socket test */
+
     @PostMapping("/{id}/test-connection")
     public ResponseEntity<ApiResponse<TestConnectionResponse>> testConnection(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(
                 profileService.testConnection(id), "Connection tested"));
     }
-
-    /** POST /profiles/{id}/clone */
     @PostMapping("/{id}/clone")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ProfileDto>> cloneProfile(
