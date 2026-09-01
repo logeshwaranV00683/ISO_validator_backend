@@ -1,6 +1,7 @@
 package com.verinite.rules.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.verinite.common.enums.DataType;
 import com.verinite.rules.dto.*;
 import com.verinite.rules.entity.FieldDefinition;
 import com.verinite.rules.event.AuditEvent;
@@ -126,6 +127,10 @@ public class FieldDefinitionService {
             if (rule.getMaxLength() != null) {
                 fd.setMaxLength(rule.getMaxLength()); // NOT sourceMaxLength — ceiling stays untouched
             }
+            if (fd.getPlaceholderValue() == null || fd.getPlaceholderValue().isBlank()) {
+                fd.setPlaceholderValue(generatePlaceholder(fd.getDataType(), fd.getMaxLength(),
+                        fd.getIsLlvar(), fd.getIsLllvar(), fd.getDeNumber(), fd.getFieldName()));
+            }
             fd.setUpdatedBy(UserContext.getUsername());
 
             FieldDefinition saved = fieldDefinitionRepository.save(fd);
@@ -145,7 +150,7 @@ public class FieldDefinitionService {
                     .isMandatory(rule.getIsMandatory())
                     .isLlvar(false)
                     .isLllvar(false)
-                    .placeholderValue(null)
+                    .placeholderValue(generatePlaceholder(rule.getDataType(), rule.getMaxLength(), false, false, rule.getDeNumber(), rule.getFieldName()))
                     .displayOrder(0)
                     .isBuilderVisible(true)
                     .active(true)
@@ -368,7 +373,8 @@ public class FieldDefinitionService {
                 .isLlvar(req.getIsLlvar() != null ? req.getIsLlvar() : false)
                 .isLllvar(req.getIsLllvar() != null ? req.getIsLllvar() : false)
                 .isMandatory(req.getIsMandatory() != null ? req.getIsMandatory() : false)
-                .placeholderValue(req.getPlaceholderValue())
+                .placeholderValue(resolvePlaceholder(req.getPlaceholderValue(), req.getDataType(),
+                        req.getMaxLength(), req.getIsLlvar(), req.getIsLllvar(), req.getDeNumber(), req.getFieldName()))
                 .displayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : 0)
                 .isBuilderVisible(req.getIsBuilderVisible() != null
                         ? req.getIsBuilderVisible() : true)
@@ -388,12 +394,172 @@ public class FieldDefinitionService {
         if (req.getIsLlvar() != null) fd.setIsLlvar(req.getIsLlvar());
         if (req.getIsLllvar() != null) fd.setIsLllvar(req.getIsLllvar());
         if (req.getIsMandatory() != null) fd.setIsMandatory(req.getIsMandatory());
-        if (req.getPlaceholderValue() != null) fd.setPlaceholderValue(req.getPlaceholderValue());
+        if (req.getPlaceholderValue() != null && !req.getPlaceholderValue().isBlank()) {
+            fd.setPlaceholderValue(req.getPlaceholderValue());
+        } else if (fd.getPlaceholderValue() == null || fd.getPlaceholderValue().isBlank()) {
+            // BRD import / bulk import rarely supplies one — backfill with a real
+            // sample where one is knowable (binary and "reserved use" fields
+            // intentionally stay blank — see generatePlaceholder()).
+            fd.setPlaceholderValue(generatePlaceholder(fd.getDataType(), fd.getMaxLength(),
+                    fd.getIsLlvar(), fd.getIsLllvar(), fd.getDeNumber(), fd.getFieldName()));
+        }
         if (req.getDisplayOrder() != null) fd.setDisplayOrder(req.getDisplayOrder());
         if (req.getIsBuilderVisible() != null) fd.setIsBuilderVisible(req.getIsBuilderVisible());
         if (req.getIsActive() != null) fd.setActive(req.getIsActive());
         if (req.getDescription() != null) fd.setDescription(req.getDescription());
         fd.setUpdatedBy(UserContext.getUsername());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PLACEHOLDER GENERATION — every creation/update path funnels through
+    // here so PLACEHOLDER is never blank in the Field Definitions grid.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Real, standard ISO 8583 sample values keyed by DE number (digits only,
+     * "DE49" and "49" both normalize to "49"). These are the values an
+     * operations analyst would actually recognize — a currency code, a
+     * transmission timestamp, a terminal ID — not generic filler text.
+     * Anything not in this map falls back to generatePlaceholder() below.
+     */
+    private static final Map<String, String> KNOWN_PLACEHOLDERS = Map.ofEntries(
+            Map.entry("2",  "4111111111111111"),      // PAN
+            Map.entry("3",  "000000"),                 // Processing code
+            Map.entry("4",  "000000010000"),            // Amount, transaction
+            Map.entry("5",  "000000010000"),            // Amount, settlement
+            Map.entry("6",  "000000010000"),            // Amount, cardholder billing
+            Map.entry("7",  "0901143000"),               // Transmission date/time MMDDhhmmss
+            Map.entry("9",  "00000000"),                 // Conversion rate, settlement
+            Map.entry("10", "00000000"),                 // Conversion rate, cardholder billing
+            Map.entry("11", "000001"),                    // STAN
+            Map.entry("12", "143000"),                    // Local transaction time
+            Map.entry("13", "0901"),                       // Local transaction date
+            Map.entry("14", "2612"),                        // Expiration date YYMM
+            Map.entry("15", "0902"),                         // Settlement date
+            Map.entry("18", "5411"),                          // Merchant category code
+            Map.entry("22", "051"),                            // POS entry mode
+            Map.entry("23", "001"),                             // Card sequence number
+            Map.entry("25", "00"),                               // POS condition code
+            Map.entry("32", "12345678"),                          // Acquiring institution ID
+            Map.entry("35", "4111111111111111=26121011234567890"), // Track 2 data
+            Map.entry("37", "RRN000000001"),                        // Retrieval reference number
+            Map.entry("38", "AUTH01"),                               // Authorization ID response
+            Map.entry("39", "00"),                                    // Response code
+            Map.entry("41", "TERM0001"),                               // Terminal ID
+            Map.entry("42", "MERCHANT000001"),                         // Merchant ID
+            Map.entry("43", "CITY MART/MUMBAI/IN"),                     // Card acceptor name/location
+            Map.entry("44", "PARTIAL APPROVAL"),                        // Additional response data
+            Map.entry("45", "%B4111111111111111^DOE/JOHN^26121010000000000000?"), // Track 1
+            Map.entry("48", "ADDITIONAL DATA PRIVATE USE"),
+            Map.entry("49", "356"),                                     // Currency code, transaction (INR)
+            Map.entry("50", "356"),                                     // Currency code, settlement
+            Map.entry("51", "356"),                                     // Currency code, cardholder billing
+            Map.entry("54", "000000010000"),                            // Additional amounts
+            Map.entry("70", "001"),                                     // Network management code
+            Map.entry("90", "020000000001000000000002000001"),         // Original data elements
+            Map.entry("100", "12345678"),                               // Receiving institution ID
+            Map.entry("102", "1234567890123456"),                       // Account ID 1
+            Map.entry("103", "1234567890123456")                        // Account ID 2
+    );
+
+    private static String resolvePlaceholder(String requested, DataType dataType, Integer maxLength,
+                                             Boolean isLlvar, Boolean isLllvar, String deNumber, String fieldName) {
+        if (requested != null && !requested.isBlank()) return requested;
+        return generatePlaceholder(dataType, maxLength, isLlvar, isLllvar, deNumber, fieldName);
+    }
+
+    /**
+     * Produces a representative sample value for a field so PLACEHOLDER is
+     * never a bare "-" in the grid when a real one is knowable. Two cases
+     * intentionally stay blank instead of showing a fake value:
+     *   - Binary fields (bitmaps, PIN blocks) — system-generated at
+     *     message-build time, not user-entered.
+     *   - Fields whose name says "reserved for ISO/national/private use" —
+     *     the ISO 8583 standard deliberately leaves these undefined, so
+     *     there's no such thing as a "correct" sample; every switch fills
+     *     them differently, and inventing one would just be fiction wearing
+     *     a placeholder's clothes.
+     *
+     * Known standard DEs (see KNOWN_PLACEHOLDERS) get a real, recognizable
+     * ISO 8583 sample value, clipped to this field's own max_length in case
+     * a profile defines a shorter/longer field than the standard. Anything
+     * else with an actual, definable purpose falls back to the field's own
+     * name (e.g. "Additional Data - ISO" → "ADDITIONALDATAISO") rather than
+     * generic filler text — numeric fields are the one exception, since
+     * letters can't go in a numeric field, so they stay zero-padded.
+     */
+    private static String generatePlaceholder(DataType dataType, Integer maxLength,
+                                              Boolean isLlvar, Boolean isLllvar, String deNumber, String fieldName) {
+        if (dataType == null || dataType == DataType.binary) return null;
+        if (isReservedUse(fieldName)) return null;
+
+        int len = (maxLength != null && maxLength > 0) ? maxLength : 6;
+        // LLVAR/LLLVAR carry a *maximum* length, not a fixed one — a shorter
+        // representative sample reads better than padding out to the ceiling.
+        boolean variableLength = Boolean.TRUE.equals(isLlvar) || Boolean.TRUE.equals(isLllvar);
+        int cappedLen = variableLength ? Math.min(len, 10) : len;
+
+        String known = deNumber != null
+                ? KNOWN_PLACEHOLDERS.get(deNumber.replaceAll("\\D", ""))
+                : null;
+        if (known != null) {
+            // Real values are already realistic full-length samples — only clip
+            // if this profile's max_length is shorter than the standard sample.
+            return known.length() > len ? known.substring(0, len) : known;
+        }
+
+        return switch (dataType) {
+            case numeric -> "0".repeat(Math.max(cappedLen - 1, 0)) + "1"; // letters can't go in a numeric field
+            case alpha -> placeholderFromFieldName(fieldName, deNumber, cappedLen, 'X');
+            case alphanumeric -> placeholderFromFieldName(fieldName, deNumber, cappedLen, '0');
+            case special -> "#".repeat(cappedLen);
+            default -> null; // unreachable — binary handled above
+        };
+    }
+
+    /**
+     * Derives a placeholder from the field's own name — like MERCHANT000001
+     * for DE42: a recognizable word, zero-padded to fill the length. Builds
+     * up whole words ("ADDITIONAL", then "RESPONSE" if it still fits) and
+     * stops BEFORE cutting a word in half, then pads the remainder — never
+     * a mid-word fragment like the old "ADITIONALR". Falls back to the DE
+     * number only if the field has no usable name at all.
+     */
+    private static String placeholderFromFieldName(String fieldName, String deNumber, int len, char pad) {
+        String[] words = fieldName != null
+                ? fieldName.toUpperCase().split("[^A-Z0-9]+")
+                : new String[0];
+
+        StringBuilder base = new StringBuilder();
+        for (String word : words) {
+            if (word.isEmpty()) continue;
+            if (base.length() + word.length() <= len) {
+                base.append(word);
+            } else if (base.isEmpty()) {
+                // Even the first word alone is longer than the field —
+                // nothing else will fit better, so just clip it.
+                base.append(word, 0, len);
+            }
+            if (base.length() >= len) break;
+        }
+
+        if (base.isEmpty()) {
+            base.append(deNumber != null ? "DE" + deNumber.replaceAll("\\D", "") : "FIELD");
+        }
+
+        return padTo(base.toString(), len, pad);
+    }
+
+    /** Matches field names like "Reserved for ISO Use", "Reserved National", "Reserved Private". */
+    private static boolean isReservedUse(String fieldName) {
+        return fieldName != null && fieldName.toUpperCase().contains("RESERVED");
+    }
+
+    private static String padTo(String base, int len, char pad) {
+        if (base.length() >= len) return base.substring(0, len);
+        StringBuilder sb = new StringBuilder(base);
+        while (sb.length() < len) sb.append(pad);
+        return sb.toString();
     }
 
     private void publishAudit(String action, String entityType,
