@@ -1,3 +1,4 @@
+
 package com.verinite.profile.controller;
 
 import com.verinite.common.dto.ApiResponse;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,15 +30,15 @@ public class FormatController {
                 .body(ApiResponse.success(formatService.create(req, username), "Format created"));
     }
 
-
-    @GetMapping("/mtis")
-    public ResponseEntity<ApiResponse<List<String>>> getMtis(@RequestParam Long profileId) {
-        return ResponseEntity.ok(ApiResponse.success(formatService.getMtisForProfile(profileId), "MTIs fetched"));
-    }
-
     @GetMapping
     public ResponseEntity<ApiResponse<List<FormatDto>>> getAllFormats() {
-        return ResponseEntity.ok(ApiResponse.success(formatService.getAll(), "Formats fetched"));
+        return ResponseEntity.ok(ApiResponse.success(formatService.getAll(isAdmin()), "Formats fetched"));
+    }
+
+    private boolean isAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     @GetMapping("/{id}")
@@ -50,7 +52,7 @@ public class FormatController {
             @PathVariable Long id,
             @RequestBody @Valid UpdateFormatRequest req,
             @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
-        // FIX: now passes full request, not just xmlContent string
+
         return ResponseEntity.ok(ApiResponse.success(
                 formatService.update(id, req, username), "Format updated"));
     }
@@ -60,7 +62,7 @@ public class FormatController {
     public ResponseEntity<ApiResponse<Void>> deleteFormat(
             @PathVariable Long id,
             @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
-        // FIX: now passes username for audit trail
+
         formatService.delete(id, username);
         return ResponseEntity.ok(ApiResponse.success(null, "Format deleted"));
     }
@@ -116,10 +118,8 @@ public class FormatController {
                 "Format rolled back to version " + version));
     }
 
-    /** GET /formats/{id}/versions — version history (no XML, just metadata) */
     @GetMapping("/{id}/versions")
     public ResponseEntity<ApiResponse<List<FormatVersionDto>>> getVersions(@PathVariable Long id) {
-        // FIX: now returns FormatVersionDto with checksum, changeNote, isCurrent, validatedOk
         return ResponseEntity.ok(ApiResponse.success(
                 formatService.getVersions(id), "Versions fetched"));
     }
