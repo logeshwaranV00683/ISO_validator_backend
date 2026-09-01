@@ -1,3 +1,130 @@
+//
+//package com.verinite.profile.controller;
+//
+//import com.verinite.common.dto.ApiResponse;
+//import com.verinite.profile.dto.*;
+//import com.verinite.profile.service.FormatService;
+//import jakarta.validation.Valid;
+//import lombok.RequiredArgsConstructor;
+//import org.springframework.http.HttpStatus;
+//import org.springframework.http.ResponseEntity;
+//import org.springframework.security.access.prepost.PreAuthorize;
+//import org.springframework.security.core.context.SecurityContextHolder;
+//import org.springframework.web.bind.annotation.*;
+//
+//import java.util.List;
+//
+//@RestController
+//@RequestMapping("/formats")
+//@RequiredArgsConstructor
+//public class FormatController {
+//
+//    private final FormatService formatService;
+//
+//    @PostMapping
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<FormatDto>> createFormat(
+//            @RequestBody @Valid CreateFormatRequest req,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//        return ResponseEntity.status(HttpStatus.CREATED)
+//                .body(ApiResponse.success(formatService.create(req, username), "Format created"));
+//    }
+//
+//    @GetMapping
+//    public ResponseEntity<ApiResponse<List<FormatDto>>> getAllFormats() {
+//        return ResponseEntity.ok(ApiResponse.success(formatService.getAll(isAdmin()), "Formats fetched"));
+//    }
+//
+//    private boolean isAdmin() {
+//        var auth = SecurityContextHolder.getContext().getAuthentication();
+//        return auth != null && auth.getAuthorities().stream()
+//                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+//    }
+//
+//    @GetMapping("/{id}")
+//    public ResponseEntity<ApiResponse<FormatDto>> getFormat(@PathVariable Long id) {
+//        return ResponseEntity.ok(ApiResponse.success(formatService.getById(id), "Format found"));
+//    }
+//
+//    @PutMapping("/{id}")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<FormatDto>> updateFormat(
+//            @PathVariable Long id,
+//            @RequestBody @Valid UpdateFormatRequest req,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//
+//        return ResponseEntity.ok(ApiResponse.success(
+//                formatService.update(id, req, username), "Format updated"));
+//    }
+//
+//    @DeleteMapping("/{id}")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<Void>> deleteFormat(
+//            @PathVariable Long id,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//
+//        formatService.delete(id, username);
+//        return ResponseEntity.ok(ApiResponse.success(null, "Format deleted"));
+//    }
+//
+//    /** PATCH /formats/{id}/status?active=true|false */
+//    @PatchMapping("/{id}/status")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<Void>> setStatus(
+//            @PathVariable Long id,
+//            @RequestParam boolean active,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//        // FIX: now passes username; service correctly toggles active/inactive
+//        formatService.setActive(id, active, username);
+//        return ResponseEntity.ok(ApiResponse.success(null,
+//                active ? "Format activated" : "Format deactivated"));
+//    }
+//
+//    /** POST /formats/validate-xml — dry-run jPOS load, no DB write */
+//    @PostMapping("/validate-xml")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<String>> validateXml(@RequestBody String xmlContent) {
+//        formatService.validateXml(xmlContent);
+//        return ResponseEntity.ok(ApiResponse.success("XML is valid", "Validation passed"));
+//    }
+//
+//    /** POST /formats/{id}/reload — force cache reload signal */
+//    @PostMapping("/{id}/reload")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<Void>> reload(@PathVariable Long id) {
+//        formatService.reload(id);
+//        return ResponseEntity.ok(ApiResponse.success(null, "Reload signal sent"));
+//    }
+//
+//    /** PUT /formats/{id}/rollback — roll back to previous version */
+//    @PutMapping("/{id}/rollback")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<FormatDto>> rollback(
+//            @PathVariable Long id,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//        return ResponseEntity.ok(ApiResponse.success(
+//                formatService.rollback(id, username), "Format rolled back"));
+//    }
+//
+//    /** PUT /formats/{id}/rollback/{version} — roll back to a specific version */
+//    @PutMapping("/{id}/rollback/{version}")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<FormatDto>> rollbackToVersion(
+//            @PathVariable Long    id,
+//            @PathVariable Integer version,
+//            @RequestHeader(value = "X-Auth-Username", defaultValue = "system") String username) {
+//        return ResponseEntity.ok(ApiResponse.success(
+//                formatService.rollbackToVersion(id, version, username),
+//                "Format rolled back to version " + version));
+//    }
+//
+//    @GetMapping("/{id}/versions")
+//    public ResponseEntity<ApiResponse<List<FormatVersionDto>>> getVersions(@PathVariable Long id) {
+//        return ResponseEntity.ok(ApiResponse.success(
+//                formatService.getVersions(id), "Versions fetched"));
+//    }
+//}
+
 
 package com.verinite.profile.controller;
 
@@ -33,6 +160,11 @@ public class FormatController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<FormatDto>>> getAllFormats() {
         return ResponseEntity.ok(ApiResponse.success(formatService.getAll(isAdmin()), "Formats fetched"));
+    }
+    @GetMapping("/mtis")
+    public ResponseEntity<ApiResponse<List<String>>> getMtis(@RequestParam Long profileId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                formatService.getMtisForProfile(profileId, isAdmin()), "MTIs fetched"));
     }
 
     private boolean isAdmin() {
@@ -117,7 +249,6 @@ public class FormatController {
                 formatService.rollbackToVersion(id, version, username),
                 "Format rolled back to version " + version));
     }
-
     @GetMapping("/{id}/versions")
     public ResponseEntity<ApiResponse<List<FormatVersionDto>>> getVersions(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(
