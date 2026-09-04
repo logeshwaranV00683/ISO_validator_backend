@@ -138,9 +138,33 @@ public class BrdController {
             return ResponseEntity.ok(ApiResponse.error(e.getMessage(), "CONFLICT"));
         } catch (Exception e) {
             log.error("[BRD] confirm failed for id={}: {}", id, e.getMessage(), e);
-            return ResponseEntity.ok(ApiResponse.error("Confirm failed: " + e.getMessage(), "BRD_CONFIRM_FAILED"));
+            return ResponseEntity.ok(ApiResponse.error(friendlyConfirmError(e), "BRD_CONFIRM_FAILED"));
         }
     }
+
+    private String friendlyConfirmError(Exception e) {
+        String raw = e.getMessage();
+        if (raw == null) return "Confirm failed: unknown error";
+
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"message\"\\s*:\\s*\"([^\"]*)\"")
+                .matcher(raw);
+        if (m.find()) {
+            String innerMessage = m.group(1);
+            if (raw.contains("profile-service")) {
+                return "Could not create switch profile: " + innerMessage +
+                        " — try a different Profile Name on the Review step.";
+            }
+            if (raw.contains("rules-service")) {
+                return "Could not import field definitions/rules: " + innerMessage;
+            }
+            return "Confirm failed: " + innerMessage;
+        }
+        return "Confirm failed: " + raw;
+    }
+
+
+
 
     /** Soft-delete pattern — sets status=FAILED rather than removing the row. */
     @DeleteMapping("/brd/{id}")

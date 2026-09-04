@@ -96,7 +96,7 @@ public class BrdConfirmService {
                                     .mti(mti)
                                     .deNumber(f.getDeNumber())
                                     .fieldName(f.getFieldName())
-                                    .dataType(f.getDataType())
+                                    .dataType(normalizeDataType(f.getDataType()))
                                     .maxLength(f.getMaxLength())
                                     .isLlvar(Boolean.TRUE.equals(f.getIsLlvar()))
                                     .isLllvar(Boolean.TRUE.equals(f.getIsLllvar()))
@@ -107,6 +107,7 @@ public class BrdConfirmService {
                                     .build())
                             .toList())
                     .build();
+//            logOutgoingPayload("bulkImportFieldDefinitions", fieldDefsRequest);
             BulkImportResultDto result = rulesServiceClient.bulkImportFieldDefinitions(fieldDefsRequest);
             fieldDefsImported = result.getImported() + result.getUpdated();
         }
@@ -129,13 +130,14 @@ public class BrdConfirmService {
                                     .isMandatory(Boolean.TRUE.equals(r.getIsMandatory()))
                                     .minLength(r.getMinLength())
                                     .maxLength(r.getMaxLength())
-                                    .dataType(r.getDataType())
-                                    .severity(r.getSeverity() != null ? r.getSeverity() : "WARNING")
+                                    .dataType(normalizeDataType(r.getDataType()))
+                                    .severity(normalizeSeverity(r.getSeverity()))
                                     .priority(1)
                                     .isActive(true)
                                     .build())
                             .toList())
                     .build();
+//            logOutgoingPayload("bulkImportRules", rulesRequest);
             BulkImportResultDto result = rulesServiceClient.bulkImportRules(rulesRequest);
             rulesImported = result.getImported() + result.getUpdated();
         }
@@ -230,6 +232,27 @@ public class BrdConfirmService {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 .replace("\"", "&quot;").replace("'", "&apos;");
     }
+
+    private String normalizeSeverity(String raw){
+        if(raw==null||raw.isBlank()) return "WARNING";
+        String res=raw.trim().toUpperCase();
+        return switch (res){
+            case "INFO","ERROR","ADVISORY","LOW","NOTICE"-> "INFO";
+            default -> "WARNING";
+        };
+    }
+
+    private String normalizeDataType(String raw) {
+        if (raw == null || raw.isBlank()) return "alphanumeric";
+        String s = raw.trim().toLowerCase();
+        return switch (s) {
+            case "numeric", "alpha", "alphanumeric", "binary", "special" -> s;
+            case "n", "num" -> "numeric";
+            case "a", "an" -> "alphanumeric";
+            default -> "alphanumeric";
+        };
+    }
+
 
     @Data
     @Builder
