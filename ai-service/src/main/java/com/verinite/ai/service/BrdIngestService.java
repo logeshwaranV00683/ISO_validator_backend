@@ -194,9 +194,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -237,6 +235,45 @@ public class BrdIngestService {
         brdAsyncProcessor.processAsync(document.getId(), fileBytes, file.getContentType());
         return document;
     }
+//    public BrdDocument ingestMultiple(List<MultipartFile> files, String uploadedBy) {
+//        if (files == null || files.isEmpty()) {
+//            throw new IllegalArgumentException("No files uploaded");
+//        }
+//        files.forEach(this::validateFile);
+//
+//        String combinedName = files.stream()
+//                .map(MultipartFile::getOriginalFilename)
+//                .reduce((a, b) -> a + ", " + b)
+//                .orElse("merged-brd");
+//        if (combinedName.length() > 250) {                       // stay under the 255-char column limit
+//            combinedName = combinedName.substring(0, 247) + "...";
+//        }
+//
+//        BrdDocument document = BrdDocument.builder()
+//                .originalFilename(combinedName)
+//                .contentType("multipart/merged")
+//                .status(BrdExtractStatus.PROCESSING)
+//                .uploadedBy(uploadedBy)
+//                .build();
+//        document = brdDocumentRepository.save(document);
+//
+//        List<BrdAsyncProcessor.BrdFileInput> fileInputs = new ArrayList<>();
+//        try {
+//            for (MultipartFile file : files) {
+//                byte[] bytes = file.getBytes();
+//                storeToDisk(bytes, document.getId(), file.getOriginalFilename()); // stored on disk for audit; path not tracked per-file here
+//                fileInputs.add(new BrdAsyncProcessor.BrdFileInput(bytes, file.getContentType(), file.getOriginalFilename()));
+//            }
+//        } catch (IOException e) {
+//            log.error("[BRD] Failed to store files for documentId={}: {}", document.getId(), e.getMessage(), e);
+//            document.setStatus(BrdExtractStatus.FAILED);
+//            document.setErrorMessage(truncate(e.getMessage(), 2000));
+//            return brdDocumentRepository.save(document);
+//        }
+//
+//        brdAsyncProcessor.processAsyncMultiple(document.getId(), fileInputs);
+//        return document;
+//    }
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {

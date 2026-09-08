@@ -25,7 +25,7 @@
 //import java.util.concurrent.Executors;
 //import java.util.concurrent.Future;
 //
-///**
+/// **
 // * Holds the actual heavy-lifting BRD processing logic (text extraction,
 // * embeddings, LLM extraction) as its own Spring bean.
 // *
@@ -224,16 +224,17 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Slf4j
 public class BrdAsyncProcessor {
+//    public record BrdFileInput(byte[] bytes, String contentType, String filename) {}
 
     private static final int CHUNK_SIZE = 2000;
     private static final int EMBEDDING_CONCURRENCY = 4;
 
     private static final long ESTIMATED_LLM_DURATION_MS = 5 * 60 * 1000L;
-    private final BrdDocumentRepository        brdDocumentRepository;
-    private final BrdEmbeddingChunkRepository  brdEmbeddingChunkRepository;
-    private final BrdExtractionService         brdExtractionService;
-    private final OllamaClient                 ollamaClient;
-    private final ObjectMapper                 objectMapper;
+    private final BrdDocumentRepository brdDocumentRepository;
+    private final BrdEmbeddingChunkRepository brdEmbeddingChunkRepository;
+    private final BrdExtractionService brdExtractionService;
+    private final OllamaClient ollamaClient;
+    private final ObjectMapper objectMapper;
 
     @Async
     public void processAsync(Long documentId, byte[] fileBytes, String contentType) {
@@ -306,6 +307,7 @@ public class BrdAsyncProcessor {
             log.warn("[BRD] Failed to update progress for documentId={}: {}", documentId, e.getMessage());
         }
     }
+
     private List<BrdEmbeddingChunk> embedChunksInParallel(Long documentId, List<String> chunks) {
         if (chunks.isEmpty()) return new ArrayList<>();
 

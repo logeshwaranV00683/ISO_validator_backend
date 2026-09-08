@@ -54,6 +54,22 @@ public class BrdController {
             return ResponseEntity.ok(ApiResponse.error("BRD upload failed: " + e.getMessage(), "BRD_UPLOAD_FAILED"));
         }
     }
+//
+//    @PostMapping(value = "/brd/upload-multi", consumes = "multipart/form-data")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<BrdDocumentDto>> uploadMultiple(@RequestParam("files") List<MultipartFile> files) {
+//        try {
+//            String username = currentUsername();
+//            BrdDocument document = brdIngestService.ingestMultiple(files, username);
+//            return ResponseEntity.status(HttpStatus.CREATED)
+//                    .body(ApiResponse.success(toDto(document), "BRD documents uploaded and merged"));
+//        } catch (IllegalArgumentException e) {
+//            return ResponseEntity.ok(ApiResponse.error(e.getMessage(), "BAD_REQUEST"));
+//        } catch (Exception e) {
+//            log.error("[BRD] Multi-upload failed: {}", e.getMessage(), e);
+//            return ResponseEntity.ok(ApiResponse.error("BRD multi-upload failed: " + e.getMessage(), "BRD_UPLOAD_FAILED"));
+//        }
+//    }
 
     @GetMapping("/brd")
     public ResponseEntity<ApiResponse<List<BrdDocumentDto>>> list() {
