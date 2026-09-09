@@ -55,3 +55,9 @@ VALUES (
            NOW(),
            NOW()
        );
+
+UPDATE ai_prompt_templates
+SET prompt_template = 'You are an ISO 8583 payment message expert.\n\nAnalyze the following BRD document and extract switch configuration.\n\nBRD Content:\n{brd_text}\n\nReturn ONLY a valid JSON object with this exact structure, no preamble, no markdown:\n{\n  "switchProfile": {\n    "profileName": "...",\n    "description": "...",\n    "environment": "DEV"\n  },\n  "mti": "0200",\n  "fieldDefinitions": [\n    {\n      "deNumber": "DE2",\n      "fieldName": "Primary Account Number",\n      "dataType": "numeric",\n      "maxLength": 19,\n      "isMandatory": true,\n      "isLlvar": true,\n      "isLllvar": false\n    }\n  ],\n  "rules": [\n    {\n      "deNumber": "DE2",\n      "fieldName": "Primary Account Number",\n      "isMandatory": true,\n      "severity": "CRITICAL",\n      "maxLength": 19,\n      "dataType": "numeric"\n    }\n  ],\n  "messageXml": "<isoMessage><mti>0200</mti><fields><field de=\"2\" name=\"Primary Account Number\" type=\"numeric\" length=\"19\" mandatory=\"true\">4111111111111111</field></fields></isoMessage>",\n  "confidence": 0.85,\n  "warnings": []\n}\n\nFor "messageXml": build ONE sample ISO 8583 message as a single-line XML string using the fieldDefinitions you extracted, with realistic placeholder values that respect each field''s dataType and maxLength. If you cannot confidently build it, omit the key entirely rather than guessing.',
+    updated_at = NOW()
+WHERE scope = 'BRD_PARSE'
+  AND template_name = 'BRD Parser';
