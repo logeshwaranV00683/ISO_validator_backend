@@ -70,7 +70,17 @@ public class FormatService {
             log.warn("XML pre-validation failed for new format [{}]: {}", req.getFormatName(), e.getMessage());
         }
 
-        MessageFormat format = MessageFormat.builder().profileId(req.getProfileId()).formatName(req.getFormatName()).isoVersion(req.getIsoVersion()).encoding(req.getEncoding() != null ? req.getEncoding() : MessageFormat.Encoding.ASCII).mti(req.getMti()).totalFields(req.getTotalFields() != null ? req.getTotalFields() : 128).status(MessageFormat.Status.active).xmlContent(cleanedXml).checksum(checksum).currentVersion(1).description(req.getDescription()).createdBy(username).updatedBy(username).build();
+        String res=req.getMti();
+        char[] ch=res.toCharArray();
+        StringBuilder mti= new StringBuilder();
+        for (char c : ch) {
+            if (Character.isDigit(c)) {
+                mti.append(c);
+            }
+            else throw new RuntimeException(" MTI can only accept digits...");
+        }
+
+        MessageFormat format = MessageFormat.builder().profileId(req.getProfileId()).formatName(req.getFormatName()).isoVersion(req.getIsoVersion()).encoding(req.getEncoding() != null ? req.getEncoding() : MessageFormat.Encoding.ASCII).mti(String.valueOf(mti)).totalFields(req.getTotalFields() != null ? req.getTotalFields() : 128).status(MessageFormat.Status.active).xmlContent(cleanedXml).checksum(checksum).currentVersion(1).description(req.getDescription()).createdBy(username).updatedBy(username).build();
 
         MessageFormat saved = formatRepo.save(format);
 
