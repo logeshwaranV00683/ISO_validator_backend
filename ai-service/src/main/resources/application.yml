@@ -94,3 +94,8 @@ feign:
       rules-service:
         connectTimeout: 3000
         readTimeout: 10000
+
+        spring:
+          flyway:
+            enabled: true
+            locations: classpath:db/migration
