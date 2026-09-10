@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
         log.warn("RuntimeException in auth-service: {}", message);
         // Account locked / invalid credentials are surfaced as BAD_REQUEST, not 500
         if (message != null && (
-                message.contains("Invalid credentials") ||
+                message.contains("Invalid") ||
                         message.contains("Account locked") ||
                         message.contains("not found") ||
                         message.contains("already exists"))) {
